@@ -1,0 +1,8 @@
+{
+	"name": "@ljharb/dt-clean-fixture-lifecycle-3-bundles-types",
+	"version": "1.0.0",
+	"private": true,
+	"dependencies": {
+		"got": "12.6.0"
+	}
+}

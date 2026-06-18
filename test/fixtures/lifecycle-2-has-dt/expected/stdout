@@ -1,0 +1,5 @@
+Package     State    Action  Version
+----------  -------  ------  -------
+@types/got  missing  add     ^9.6.12
+
+1 `@types/*` package: 0 keep, 0 move, 0 remove, 1 add.

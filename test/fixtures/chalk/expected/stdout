@@ -1,0 +1,5 @@
+Package       State    Action  Version
+------------  -------  ------  -------
+@types/chalk  present  remove  2.2.4
+
+1 `@types/*` package: 0 keep, 0 move, 1 remove, 0 add.

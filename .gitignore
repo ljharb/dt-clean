@@ -40,6 +40,8 @@ build/Release
 
 # Dependency directories
 node_modules/
+# …except the committed stub installs that fixtures resolve their types from
+!test/fixtures/*/node_modules/
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
@@ -133,3 +135,5 @@ dist
 npm-shrinkwrap.json
 package-lock.json
 yarn.lock
+
+.npmignore

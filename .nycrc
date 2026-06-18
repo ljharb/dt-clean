@@ -1,0 +1,15 @@
+{
+	"all": true,
+	"check-coverage": true,
+	"reporter": [
+		"text",
+		"lcov"
+	],
+	"include": [
+		"*.mjs"
+	],
+	"exclude": [
+		"eslint.config.mjs",
+		"test"
+	]
+}

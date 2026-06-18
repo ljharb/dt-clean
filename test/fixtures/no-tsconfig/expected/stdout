@@ -1,0 +1,6 @@
+Package        State    Action  Version
+-------------  -------  ------  -------
+@types/lodash  present  remove  4.17.13
+@types/node    present  remove  22.10.2
+
+2 `@types/*` packages: 0 keep, 0 move, 2 remove, 0 add.

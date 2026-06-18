@@ -1,0 +1,5 @@
+Package        State    Action  Version
+-------------  -------  ------  -------
+@types/lodash  present  keep    4.17.13
+
+1 `@types/*` package: 1 keep, 0 move, 0 remove, 0 add.

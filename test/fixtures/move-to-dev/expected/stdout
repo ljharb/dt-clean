@@ -1,0 +1,5 @@
+Package        State    Action  Version
+-------------  -------  ------  -------
+@types/semver  present  move    7.5.8
+
+1 `@types/*` package: 0 keep, 1 move, 0 remove, 0 add.

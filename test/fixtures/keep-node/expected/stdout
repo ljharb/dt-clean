@@ -1,0 +1,5 @@
+Package      State    Action  Version
+-----------  -------  ------  -------
+@types/node  present  keep    22.10.2
+
+1 `@types/*` package: 1 keep, 0 move, 0 remove, 0 add.

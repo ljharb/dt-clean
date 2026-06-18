@@ -1,0 +1,5 @@
+Package             State    Action  Version
+------------------  -------  ------  -------
+@types/babel__core  missing  add     ^7.20.5
+
+1 `@types/*` package: 0 keep, 0 move, 0 remove, 1 add.

@@ -1,0 +1,55 @@
+name: 'Tests: live registry'
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0,12 * * *' # twice daily, at 00:00 and 12:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: 'live fixtures'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ljharb/actions/node/install@main
+        with:
+          node-version: 24
+      - name: 'regenerate fixtures from the live registry'
+        run: npm run tests:live
+      - name: 'fail if the live registry has drifted from the committed fixtures'
+        run: git diff --exit-code -- test/fixtures
+
+  registry:
+    name: 'registry smoke (shard ${{ matrix.shard }})'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # one job per shard; `SHARD_TOTAL` below must equal the number of shards listed here
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ljharb/actions/node/install@main
+        with:
+          node-version: 24
+      - name: 'run dt-clean against the most-depended-on packages'
+        run: npm run tests:registry
+        env:
+          REGISTRY_COUNT: 10000
+          REGISTRY_CONCURRENCY: 16
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_TOTAL: 20
+
+  projects:
+    name: 'installed-project checks'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ljharb/actions/node/install@main
+        with:
+          node-version: 24
+      - name: 'run dt-clean against really-installed projects'
+        run: npm run tests:projects

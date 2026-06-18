@@ -1,0 +1,5 @@
+Package        State    Action  Version
+-------------  -------  ------  --------
+@types/lodash  missing  add     ^4.17.24
+
+1 `@types/*` package: 0 keep, 0 move, 0 remove, 1 add.

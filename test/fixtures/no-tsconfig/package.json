@@ -1,0 +1,12 @@
+{
+	"name": "@ljharb/dt-clean-fixture-no-tsconfig",
+	"version": "1.0.0",
+	"private": true,
+	"dependencies": {
+		"lodash": "4.17.21"
+	},
+	"devDependencies": {
+		"@types/lodash": "4.17.13",
+		"@types/node": "22.10.2"
+	}
+}

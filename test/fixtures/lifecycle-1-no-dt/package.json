@@ -1,0 +1,8 @@
+{
+	"name": "@ljharb/dt-clean-fixture-lifecycle-1-no-dt",
+	"version": "1.0.0",
+	"private": true,
+	"dependencies": {
+		"got": "6.7.0"
+	}
+}

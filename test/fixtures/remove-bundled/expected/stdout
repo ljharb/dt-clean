@@ -1,0 +1,5 @@
+Package        State    Action  Version
+-------------  -------  ------  -------
+@types/nanoid  present  remove  3.0.0
+
+1 `@types/*` package: 0 keep, 0 move, 1 remove, 0 add.
