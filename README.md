@@ -12,8 +12,8 @@ Ensures the only DefinitelyTyped (`@types/*`) packages you have installed are th
 `dt-clean` inspects your `package.json` and, for each dependency, decides what should happen to its DefinitelyTyped types package:
 
 - **add**: the runtime package ships no types of its own, but a matching `@types/*` package exists on the registry.
-- **move**: an `@types/*` package is in `dependencies`, but belongs in `devDependencies`.
-- **remove**: an `@types/*` package is installed but no longer needed: the runtime package now bundles its own types, or it no longer corresponds to any dependency.
+- **move**: a `@types/*` package is in `dependencies`, but belongs in `devDependencies`.
+- **remove**: a `@types/*` package is installed but no longer needed: the runtime package now bundles its own types, or it no longer corresponds to any dependency.
 - **keep**: the `@types/*` package is present and still needed. `@types/node` is always kept.
 
 ## Usage
