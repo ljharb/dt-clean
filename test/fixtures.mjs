@@ -15,6 +15,7 @@ import semver from 'semver';
 import realHasTypes from 'hastypes';
 
 import formatReport from '#/report';
+import exitCode from '#/exitCode';
 import localHasTypes from './helpers/localHasTypes.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -87,7 +88,11 @@ async function runFixture(dir) {
 		toRemove,
 	} = await getDelTa(dir);
 
-	const pending = toAdd.size + toMove.size + toRemove.length > 0;
+	const code = exitCode({
+		toAdd,
+		toMove,
+		toRemove,
+	});
 	return {
 		stdout: `${formatReport({
 			present,
@@ -95,8 +100,8 @@ async function runFixture(dir) {
 			toMove,
 			toRemove,
 		})}\n`,
-		stderr: pending ? '\nRe-run with `--update` (`-u`) to apply these changes to `package.json`.\n' : '',
-		'exit-code': '0\n',
+		stderr: code > 0 ? '\nRe-run with `--update` (`-u`) to apply these changes to `package.json`.\n' : '',
+		'exit-code': `${code}\n`,
 	};
 }
 

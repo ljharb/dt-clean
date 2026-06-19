@@ -14,6 +14,11 @@ import { dirname, join } from 'path';
 
 import applyChanges from '#/applyChanges';
 import formatReport from '#/report';
+import exitCode, {
+	TO_REMOVE,
+	TO_ADD,
+	TO_MOVE,
+} from '#/exitCode';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const binPath = join(root, '..', 'bin.mjs');
@@ -385,13 +390,13 @@ test('formatReport: singular summary and empty case', (t) => {
 	t.end();
 });
 
-/** @type {(args: string[], opts?: { cwd?: string }) => { stdout: string, stderr: string }} */
+/** @type {(args: string[], opts?: { cwd?: string }) => { stdout: string, stderr: string, status: number | null }} */
 function runBin(args, { cwd } = {}) {
-	const { stdout, stderr } = spawnSync('node', [binPath, ...args], {
+	const { stdout, stderr, status } = spawnSync('node', [binPath, ...args], {
 		cwd,
 		encoding: 'utf8',
 	});
-	return { stdout, stderr };
+	return { stdout, stderr, status };
 }
 
 test('bin: --help prints usage', (t) => {
@@ -459,5 +464,69 @@ test('bin: --update on a clean project changes nothing', (t) => {
 
 	runBin(['-u'], { cwd: dir });
 	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'leaves a clean project untouched');
+	t.end();
+});
+
+test('exitCode: bitmasks each pending change kind', (t) => {
+	/** @type {(kinds: { add?: boolean, move?: boolean, remove?: boolean }) => number} */
+	function code({ add = false, move = false, remove = false }) {
+		return exitCode({
+			toAdd: new Map(add ? [['@types/a', '^1.0.0']] : []),
+			toMove: new Map(move ? [['@types/m', '^1.0.0']] : []),
+			toRemove: remove ? ['@types/r'] : [],
+		});
+	}
+
+	t.equal(TO_REMOVE, 1, 'remove is bit 0');
+	t.equal(TO_ADD, 2, 'add is bit 1');
+	t.equal(TO_MOVE, 4, 'move is bit 2');
+
+	t.equal(code({}), 0, 'a clean delta exits zero');
+	t.equal(code({ remove: true }), TO_REMOVE, 'remove sets its own bit');
+	t.equal(code({ add: true }), TO_ADD, 'add sets its own bit');
+	t.equal(code({ move: true }), TO_MOVE, 'move sets its own bit');
+
+	t.equal(code({ add: true, remove: true }), TO_ADD | TO_REMOVE, 'combined kinds OR their bits');
+	t.equal(
+		code({ add: true, move: true, remove: true }),
+		TO_REMOVE | TO_ADD | TO_MOVE,
+		'all three kinds combine',
+	);
+	t.equal(code({ add: true, move: true, remove: true }), 7, 'all three kinds combine into 7');
+
+	t.end();
+});
+
+test('bin: exits with the remove bit for a dirty project', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { status } = runBin([dir]);
+	t.equal(status, TO_REMOVE, 'a dirty project exits nonzero with the remove bit set');
+	t.end();
+});
+
+test('bin: exits zero for a clean project', (t) => {
+	const dir = project(t, { pkg: { devDependencies: { '@types/node': '^25.0.0' } } });
+
+	const { status } = runBin([], { cwd: dir });
+	t.equal(status, 0, 'a clean project exits zero');
+	t.end();
+});
+
+test('bin: --update exits zero after cleaning a dirty project', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { status } = runBin(['--update', dir]);
+	t.equal(status, 0, '`--update` exits zero on success even though the project was dirty');
 	t.end();
 });

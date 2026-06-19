@@ -49,6 +49,21 @@ With `--update` (`-u`), `dt-clean` edits `package.json` in place - adding, movin
 - `-u`, `--update`: apply the changes to `package.json` (default: report only).
 - `--help`: show usage.
 
+### Exit codes
+
+In the default report-only mode, the exit code is a bitmask of the kinds of pending changes, so a clean project exits `0` and you can fail CI (or a `git` pre-commit hook) on drift:
+
+| Value | Meaning                                  |
+| ----- | ---------------------------------------- |
+| `1`   | there are `@types/*` packages to remove  |
+| `2`   | there are `@types/*` packages to add     |
+| `4`   | there are `@types/*` packages to move    |
+
+The bits combine, so a project that needs both an add and a remove exits `3`, and one that needs all three exits `7`.
+
+With `--update`, `dt-clean` applies the changes, leaving the project clean, so a successful run always exits `0`;
+a nonzero exit then means the update itself failed.
+
 [package-url]: https://npmjs.org/package/dt-clean
 [npm-version-svg]: https://versionbadg.es/ljharb/dt-clean.svg
 [npm-badge-png]: https://nodei.co/npm/dt-clean.png?downloads=true&stars=true

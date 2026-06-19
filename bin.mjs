@@ -7,6 +7,7 @@ import pargs from 'pargs';
 import getDelTa from '#/getDelTa';
 import applyChanges from '#/applyChanges';
 import formatReport from '#/report';
+import exitCode from '#/exitCode';
 
 const {
 	values: { json, update },
@@ -64,6 +65,8 @@ if (json) {
 }
 
 if (update) {
+	// `--update` applies the changes, leaving the project clean, so a successful run exits zero;
+	// only an error (e.g. a failed write, which throws) yields a nonzero exit.
 	const changed = await applyChanges(cwd, {
 		toAdd,
 		toMove,
@@ -72,6 +75,15 @@ if (update) {
 	console.error(changed
 		? '\nUpdated `package.json`; run `npm install` (or your package manager’s equivalent) to sync.'
 		: '\nNo changes needed.');
-} else if (toAdd.size + toMove.size + toRemove.length > 0) {
-	console.error('\nRe-run with `--update` (`-u`) to apply these changes to `package.json`.');
+} else {
+	// report-only: the exit code is a bitmask of the pending change kinds, so a clean project exits zero.
+	const code = exitCode({
+		toAdd,
+		toMove,
+		toRemove,
+	});
+	process.exitCode = code;
+	if (code > 0) {
+		console.error('\nRe-run with `--update` (`-u`) to apply these changes to `package.json`.');
+	}
 }
