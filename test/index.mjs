@@ -782,6 +782,98 @@ test('setup: is idempotent when already wired (even inside a chained script)', a
 	t.end();
 });
 
+test('setup: leaves a standalone invocation alone when it is already best-placed', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: 'dt-clean --auto' } } });
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'present', script: 'dependencies' }, 'already in the preferred slot');
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no change');
+
+	t.end();
+});
+
+test('setup: moves a standalone invocation to a now-free, more-preferred hook', async (t) => {
+	const dir = project(t, { pkg: { scripts: { predependencies: 'dt-clean --auto' } } });
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'moved', script: 'dependencies' }, 'relocates from `pre` to `dependencies`');
+	t.deepEqual(
+		readScripts(dir),
+		{ dependencies: 'dt-clean --auto' },
+		'the `predependencies` hook is gone and `dependencies` now holds it',
+	);
+
+	t.end();
+});
+
+test('setup: moves toward the best available hook even when `dependencies` stays taken', async (t) => {
+	const dir = project(t, {
+		pkg: {
+			scripts: {
+				dependencies: 'build',
+				predependencies: 'dt-clean --auto',
+			},
+		},
+	});
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'moved', script: 'postdependencies' }, 'relocates `pre` -> `post` (the best free hook)');
+	t.deepEqual(
+		readScripts(dir),
+		{ dependencies: 'build', postdependencies: 'dt-clean --auto' },
+		'leaves the occupied `dependencies` script and moves ours up to `post`',
+	);
+
+	t.end();
+});
+
+test('setup: does not relocate a chained `dt-clean --auto` it does not own', async (t) => {
+	const dir = project(t, { pkg: { scripts: { postdependencies: 'flush-cache && dt-clean --auto' } } });
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'present', script: 'postdependencies' }, 'treats a customized invocation as present');
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'never rewrites a script it did not author');
+
+	t.end();
+});
+
+test('setup: never adds a second `dt-clean` when one is already present without `--auto`', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: 'dt-clean --update' } } });
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'exists', script: 'dependencies' }, 'reports the existing `dt-clean` invocation');
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no change rather than duplicating `dt-clean`');
+
+	t.end();
+});
+
+test('setup: detects an existing `dt-clean` in any hook, not just `dependencies`', async (t) => {
+	const dir = project(t, {
+		pkg: {
+			scripts: {
+				build: 'tsc',
+				postdependencies: 'dt-clean',
+			},
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'exists', script: 'postdependencies' }, 'finds the bare `dt-clean` in the `post` hook');
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'and leaves it alone');
+
+	t.end();
+});
+
 test('bin: --setup wires the script and is idempotent on a second run', (t) => {
 	const dir = project(t, { pkg: { scripts: { test: 'tape' } } });
 

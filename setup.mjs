@@ -21,6 +21,11 @@ function hasAuto(script) {
 	return typeof script === 'string' && (/\bdt-clean\b[^&|;]*--auto\b/).test(script);
 }
 
+/** @param {string | undefined} script */
+function hasDtClean(script) {
+	return typeof script === 'string' && (/\bdt-clean\b/).test(script);
+}
+
 /** @type {import('./setup.d.ts')} */
 export default async function setup(cwd) {
 	const packageJSONpath = join(cwd, 'package.json');
@@ -32,18 +37,38 @@ export default async function setup(cwd) {
 	/** @type {NonNullable<PackageJSON['scripts']>} */
 	const scripts = { ...pkg.scripts };
 
-	const present = HOOKS.find((hook) => hasAuto(scripts[hook]));
-	if (present) {
-		return { action: 'present', script: present };
+	// a standalone `dt-clean --auto` we wrote ourselves, which we may therefore safely relocate.
+	const owned = HOOKS.find((hook) => scripts[hook] === AUTO);
+
+	if (!owned) {
+		// a `dt-clean --auto` we didn't write (chained or customized): leave it exactly as-is.
+		const wired = HOOKS.find((hook) => hasAuto(scripts[hook]));
+		if (wired) {
+			return { action: 'present', script: wired };
+		}
+		// some other `dt-clean` invocation: don't add a second one.
+		const existing = HOOKS.find((hook) => hasDtClean(scripts[hook]));
+		if (existing) {
+			return { action: 'exists', script: existing };
+		}
 	}
 
-	const free = HOOKS.find((hook) => !scripts[hook]);
+	// the most-preferred hook our invocation should occupy: free, or already holding it.
+	const target = HOOKS.find((hook) => !scripts[hook] || scripts[hook] === AUTO);
+
+	if (owned && owned === target) {
+		return { action: 'present', script: owned };
+	}
 
 	/** @type {SetupResult} */
 	let result;
-	if (free) {
-		scripts[free] = AUTO;
-		result = { action: 'set', script: free };
+	if (target) {
+		if (owned) {
+			// a more-preferred hook is now free: relocate to it.
+			delete scripts[owned];
+		}
+		scripts[target] = AUTO;
+		result = { action: owned ? 'moved' : 'set', script: target };
 	} else {
 		// every hook is occupied, so chain onto `dependencies` rather than clobber anything.
 		scripts.dependencies = `${scripts.dependencies} && ${AUTO}`;

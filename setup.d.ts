@@ -4,7 +4,7 @@ declare namespace setup {
     type DependencyHook = 'predependencies' | 'dependencies' | 'postdependencies';
 
     type SetupResult = {
-        action: 'present' | 'set' | 'chained';
+        action: 'present' | 'exists' | 'set' | 'moved' | 'chained';
         script: DependencyHook;
     };
 }

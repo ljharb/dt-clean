@@ -67,6 +67,8 @@ if (setup) {
 	const { action, script } = await setupScripts(cwd);
 	console.log({
 		chained: `Appended \`dt-clean --auto\` to the existing \`${script}\` script in \`package.json\`.`,
+		exists: `\`${script}\` already invokes \`dt-clean\` (without \`--auto\`); leaving it unchanged - add \`--auto\` there yourself for install-time cleanup.`,
+		moved: `Moved \`dt-clean --auto\` to the preferred \`${script}\` script in \`package.json\`.`,
 		present: `\`${script}\` already runs \`dt-clean --auto\`; nothing to do.`,
 		set: `Added \`dt-clean --auto\` to the \`${script}\` script in \`package.json\`.`,
 	}[action]);

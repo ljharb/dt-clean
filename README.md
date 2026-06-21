@@ -65,9 +65,10 @@ npx dt-clean --setup
 
 - if you have no `dependencies` script, it adds `"dependencies": "dt-clean --auto"`;
 - if you already have one, it adds `dt-clean --auto` to a free `postdependencies` (or `predependencies`) hook instead, so your existing script is never touched - and if every hook is taken, it appends `&& dt-clean --auto` to your `dependencies` script rather than clobbering it;
-- if `dt-clean --auto` is already wired in, it does nothing.
+- if it already added `dt-clean --auto` to a `post`/`pre` hook and the preferred `dependencies` slot later frees up, re-running moves it back to the most-preferred available hook;
+- if `dt-clean --auto` is already in the best available hook, it does nothing; and if some other `dt-clean` invocation (or a customized one you wrote) is already present, it leaves that alone rather than adding a duplicate.
 
-It only ever adds this one invocation and leaves the rest of your `package.json` (and its formatting) alone, so it's safe to re-run. The result is simply the equivalent of:
+It only ever manages this one invocation and leaves the rest of your `package.json` (and its formatting) alone, so it's safe to re-run - repeated runs converge on the same result. That result is simply the equivalent of:
 
 ```json
 {
