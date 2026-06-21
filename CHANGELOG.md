@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.1.0](https://github.com/ljharb/dt-clean/compare/v1.0.1...v1.1.0) - 2026-06-21
+
+### Commits
+
+- [New] add `--auto`, meant for the `dependencies` lifecycle script [`bc60a91`](https://github.com/ljharb/dt-clean/commit/bc60a91bf4f3e4d0964f8dcb71d1b0d1182612f9)
+- [Tests] treat taken-down registry packages as skipped, not failures [`d020cc6`](https://github.com/ljharb/dt-clean/commit/d020cc62dd06de08189eebfe45e79a372ec8e5a1)
+- [meta] run `dt-clean --setup` [`459cc0c`](https://github.com/ljharb/dt-clean/commit/459cc0cc3a5a2b64e498946c8930ae49899eb8b3)
+
 ## [v1.0.1](https://github.com/ljharb/dt-clean/compare/v1.0.0...v1.0.1) - 2026-06-19
 
 ### Commits
