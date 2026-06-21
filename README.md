@@ -47,7 +47,44 @@ With `--update` (`-u`), `dt-clean` edits `package.json` in place - adding, movin
 ### Options
 
 - `-u`, `--update`: apply the changes to `package.json` (default: report only).
+- `--setup`: idempotently wire `dt-clean --auto` into a `dependencies` lifecycle script, without overwriting any existing script (see [Automatic cleanup](#automatic-cleanup)).
+- `--auto`: for use in a `dependencies` lifecycle script - apply the changes like `--update` during `npm install`, but during `npm ci` only print what would change and exit `0` (see [Automatic cleanup](#automatic-cleanup)).
 - `--help`: show usage.
+
+### Automatic cleanup
+
+To keep your `@types/*` set tidy on every install, run `dt-clean --auto` from a [`dependencies` lifecycle script](https://docs.npmjs.com/cli/using-npm/scripts#npm-install) - the one npm's installer (arborist) runs after any operation that changes `node_modules`.
+
+The one-step way to set this up, in any project, is:
+
+```sh
+npx dt-clean --setup
+```
+
+`--setup` edits `package.json` for you and is safe to run anywhere:
+
+- if you have no `dependencies` script, it adds `"dependencies": "dt-clean --auto"`;
+- if you already have one, it adds `dt-clean --auto` to a free `postdependencies` (or `predependencies`) hook instead, so your existing script is never touched - and if every hook is taken, it appends `&& dt-clean --auto` to your `dependencies` script rather than clobbering it;
+- if `dt-clean --auto` is already wired in, it does nothing.
+
+It only ever adds this one invocation and leaves the rest of your `package.json` (and its formatting) alone, so it's safe to re-run. The result is simply the equivalent of:
+
+```json
+{
+  "scripts": {
+    "dependencies": "dt-clean --auto"
+  }
+}
+```
+
+Once it's wired in, `dt-clean --auto` inspects `npm_command` to decide what to do:
+
+- under `npm install`, it applies the changes for you, so a fresh install keeps your `@types/*` set tidy automatically;
+- under `npm ci` (typically used in CI pipelines, where `package.json` must not be mutated), it only prints what would change and exits `0`, so it never edits a checked-in file and never fails the install.
+
+When `npm_command` is anything else (or absent), `--auto` applies the changes, exactly as under `npm install`.
+
+To avoid surprising edits, `--auto` runs *only* inside the `dependencies` lifecycle (or its `predependencies`/`postdependencies` hooks): it checks `npm_lifecycle_event`, and if it is invoked any other way (for example directly from the shell) it refuses to do anything and exits nonzero. Use `--update` to apply changes manually.
 
 ### Exit codes
 

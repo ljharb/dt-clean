@@ -14,6 +14,7 @@ import { dirname, join } from 'path';
 
 import applyChanges from '#/applyChanges';
 import formatReport from '#/report';
+import setup from '#/setup';
 import exitCode, {
 	TO_REMOVE,
 	TO_ADD,
@@ -390,13 +391,42 @@ test('formatReport: singular summary and empty case', (t) => {
 	t.end();
 });
 
-/** @type {(args: string[], opts?: { cwd?: string }) => { stdout: string, stderr: string, status: number | null }} */
-function runBin(args, { cwd } = {}) {
+/**
+ * @param {string[]} args
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv }} [opts]
+ */
+function runBin(args, { cwd, env } = {}) {
 	const { stdout, stderr, status } = spawnSync('node', [binPath, ...args], {
 		cwd,
 		encoding: 'utf8',
+		env,
 	});
 	return { stdout, stderr, status };
+}
+
+/**
+ * Builds a child environment with a controlled `npm_command` and `npm_lifecycle_event`, since the
+ * test runner itself sets both. `lifecycle` defaults to `'dependencies'` (where `--auto` is meant to
+ * run); pass `false` to simulate `--auto` invoked outside a `dependencies` lifecycle script.
+ *
+ * @type {(opts?: { command?: string, lifecycle?: string | false }) => NodeJS.ProcessEnv}
+ */
+function envWith({ command, lifecycle = 'dependencies' } = {}) {
+	// indexed by string variables so neither `camelcase` (dot access) nor `dot-notation` (bracket
+	// access) fires on these intentionally snake_cased npm environment variables.
+	const COMMAND = 'npm_command';
+	const LIFECYCLE = 'npm_lifecycle_event';
+
+	// eslint-disable-next-line no-unused-vars
+	const { [COMMAND]: _, [LIFECYCLE]: __, ...env } = process.env;
+
+	if (typeof command === 'string') {
+		env[COMMAND] = command;
+	}
+	if (typeof lifecycle === 'string') {
+		env[LIFECYCLE] = lifecycle;
+	}
+	return env;
 }
 
 test('bin: --help prints usage', (t) => {
@@ -528,5 +558,241 @@ test('bin: --update exits zero after cleaning a dirty project', (t) => {
 
 	const { status } = runBin(['--update', dir]);
 	t.equal(status, 0, '`--update` exits zero on success even though the project was dirty');
+	t.end();
+});
+
+test('bin: --auto under `npm ci` reports but makes no changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { stdout, stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'ci' }) });
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'leaves `package.json` untouched under `npm ci`');
+	t.match(stdout, /@types\/orphan\s+present\s+remove/, 'still prints the dry-run report of what would change');
+	t.match(stderr, /npm ci/, 'notes that it left `package.json` unchanged');
+	t.equal(status, 0, 'exits zero so a CI install never fails');
+	t.end();
+});
+
+test('bin: --auto under `npm ci` on a clean project exits zero quietly', (t) => {
+	const dir = project(t, { pkg: { devDependencies: { '@types/node': '^25.0.0' } } });
+
+	const { stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'ci' }) });
+
+	t.notOk((/npm ci/).test(stderr), 'says nothing about leaving the file alone when there is nothing to change');
+	t.equal(status, 0, 'a clean project still exits zero');
+	t.end();
+});
+
+test('bin: --auto under `npm install` applies the changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { status } = runBin(['--auto', dir], { env: envWith({ command: 'install' }) });
+
+	const pkg = JSON.parse(`${readFileSync(join(dir, 'package.json'))}`);
+	t.notOk('dependencies' in pkg, 'removes the orphaned `@types` during `npm install`');
+	t.equal(status, 0, '`--auto` exits zero after applying');
+	t.end();
+});
+
+test('bin: --auto with no `npm_command` applies the changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { status } = runBin(['--auto', dir], { env: envWith() });
+
+	const pkg = JSON.parse(`${readFileSync(join(dir, 'package.json'))}`);
+	t.notOk('dependencies' in pkg, 'applies when `npm_command` is unset, like `npm install`');
+	t.equal(status, 0, '`--auto` exits zero after applying');
+	t.end();
+});
+
+test('bin: --auto on a clean project exits zero without changes', (t) => {
+	const dir = project(t, { pkg: { devDependencies: { '@types/node': '^25.0.0' } } });
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { status } = runBin(['--auto', dir], { env: envWith() });
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'leaves a clean project untouched');
+	t.equal(status, 0, 'a no-op `--auto` exits zero');
+	t.end();
+});
+
+test('bin: --auto outside a `dependencies` lifecycle script refuses to run', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { stdout, stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'install', lifecycle: false }) });
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no changes when not run as a `dependencies` script');
+	t.equal(stdout, '', 'prints no report');
+	t.match(stderr, /only runs inside a `dependencies`/, 'explains why it refused');
+	t.equal(status, 1, 'exits nonzero on misuse');
+	t.end();
+});
+
+test('bin: --auto in a `postdependencies` hook applies the changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { status } = runBin(['--auto', dir], { env: envWith({ command: 'install', lifecycle: 'postdependencies' }) });
+
+	const pkg = JSON.parse(`${readFileSync(join(dir, 'package.json'))}`);
+	t.notOk('dependencies' in pkg, 'the `postdependencies` hook is a valid slot, so it applies');
+	t.equal(status, 0, '`--auto` exits zero after applying');
+	t.end();
+});
+
+test('bin: --auto in a `predependencies` hook applies the changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { status } = runBin(['--auto', dir], { env: envWith({ command: 'install', lifecycle: 'predependencies' }) });
+
+	const pkg = JSON.parse(`${readFileSync(join(dir, 'package.json'))}`);
+	t.notOk('dependencies' in pkg, 'the `predependencies` hook is a valid slot, so it applies');
+	t.equal(status, 0, '`--auto` exits zero after applying');
+	t.end();
+});
+
+test('bin: --auto in an unrelated lifecycle script refuses to run', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { status } = runBin(['--auto', dir], { env: envWith({ command: 'install', lifecycle: 'postinstall' }) });
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'a non-`dependencies` lifecycle event is rejected too');
+	t.equal(status, 1, 'exits nonzero on misuse');
+	t.end();
+});
+
+/** @param {string} dir */
+function readScripts(dir) {
+	return JSON.parse(`${readFileSync(join(dir, 'package.json'))}`).scripts;
+}
+
+test('setup: uses the `dependencies` event when it is free', async (t) => {
+	const dir = project(t, { pkg: { scripts: { test: 'tape' } } });
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'set', script: 'dependencies' }, 'reports the slot it used');
+	t.deepEqual(
+		readScripts(dir),
+		{ test: 'tape', dependencies: 'dt-clean --auto' },
+		'adds the `dependencies` script and preserves the existing ones',
+	);
+
+	t.end();
+});
+
+test('setup: falls back to `postdependencies` when `dependencies` is taken', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: 'do-something' } } });
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'set', script: 'postdependencies' }, 'uses the `post` hook');
+	t.deepEqual(
+		readScripts(dir),
+		{ dependencies: 'do-something', postdependencies: 'dt-clean --auto' },
+		'leaves the existing `dependencies` script untouched',
+	);
+
+	t.end();
+});
+
+test('setup: falls back to `predependencies` when `dependencies` and `postdependencies` are taken', async (t) => {
+	const dir = project(t, {
+		pkg: {
+			scripts: {
+				dependencies: 'a',
+				postdependencies: 'b',
+			},
+		},
+	});
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'set', script: 'predependencies' }, 'uses the `pre` hook');
+	t.equal(readScripts(dir).predependencies, 'dt-clean --auto', 'adds the `predependencies` script');
+
+	t.end();
+});
+
+test('setup: chains onto `dependencies` when every hook is occupied', async (t) => {
+	const dir = project(t, {
+		pkg: {
+			scripts: {
+				predependencies: 'a',
+				dependencies: 'b',
+				postdependencies: 'c',
+			},
+		},
+	});
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'chained', script: 'dependencies' }, 'reports that it chained');
+	t.equal(readScripts(dir).dependencies, 'b && dt-clean --auto', 'appends without dropping the original command');
+
+	t.end();
+});
+
+test('setup: is idempotent when already wired (even inside a chained script)', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: 'build && dt-clean --auto' } } });
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'present', script: 'dependencies' }, 'detects the existing invocation');
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'leaves `package.json` byte-for-byte unchanged');
+
+	t.end();
+});
+
+test('bin: --setup wires the script and is idempotent on a second run', (t) => {
+	const dir = project(t, { pkg: { scripts: { test: 'tape' } } });
+
+	const first = runBin(['--setup', dir]);
+	t.match(first.stdout, /Added `dt-clean --auto` to the `dependencies`/, 'announces the change');
+	t.equal(first.status, 0, 'exits zero');
+	t.equal(readScripts(dir).dependencies, 'dt-clean --auto', 'wires the `dependencies` script');
+
+	const second = runBin(['--setup', dir]);
+	t.match(second.stdout, /already runs `dt-clean --auto`/, 'a second run is a no-op');
+	t.equal(second.status, 0, 'still exits zero');
+
 	t.end();
 });

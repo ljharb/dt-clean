@@ -7,5 +7,6 @@ export interface PackageJSON {
     version?: string;
     dependencies?: Dependencies;
     devDependencies?: Dependencies;
+    scripts?: Record<string, string>;
     [field: string]: unknown;
 }

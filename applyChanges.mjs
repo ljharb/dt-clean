@@ -1,11 +1,7 @@
 import { join } from 'path';
 import { readFile, writeFile } from 'fs/promises';
 
-/** @param {string} raw */
-function detectIndent(raw) {
-	const match = (/^[ \t]+/m).exec(raw);
-	return match?.[0] ?? '\t';
-}
+import detectIndent from '#/detectIndent';
 
 /** @type {<K extends string, V>(obj: Record<K, V>) => Record<K, V>} */
 function sortKeys(obj) {
