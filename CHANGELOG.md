@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.1.1](https://github.com/ljharb/dt-clean/compare/v1.1.0...v1.1.1) - 2026-06-21
+
+### Commits
+
+- [Fix] `--setup`: never duplicate `dt-clean`, and converge on the preferred hook [`bc32122`](https://github.com/ljharb/dt-clean/commit/bc321229b54decfd6000e8d58d202604c36af206)
+- [Dev Deps] add `dt-clean` (self-reference) [`d1a6cdf`](https://github.com/ljharb/dt-clean/commit/d1a6cdf7de2c29d1a17858bf8febf4bd586253f6)
+
 ## [v1.1.0](https://github.com/ljharb/dt-clean/compare/v1.0.1...v1.1.0) - 2026-06-21
 
 ### Commits

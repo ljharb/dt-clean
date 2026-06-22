@@ -1,6 +1,6 @@
 {
 	"name": "dt-clean",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"description": "Ensures the only DefinitelyTyped (`@types`) packages you have installed are the ones you need",
 	"bin": "./bin.mjs",
 	"exports": {
