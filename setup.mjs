@@ -1,12 +1,18 @@
 import { join } from 'path';
 import { readFile, writeFile } from 'fs/promises';
+import { createRequire } from 'module';
 
 import detectIndent from '#/detectIndent';
 
 /** @import { PackageJSON } from './types/types.d.ts' */
 /** @import { SetupResult } from './setup.d.ts' */
 
-const AUTO = 'dt-clean --auto';
+const { version } = createRequire(import.meta.url)('./package.json');
+
+// run through `npx`, npm erases the real `npm_command`, so the script forwards it in
+// `DT_CLEAN_NPM_COMMAND` (a POSIX-shell expansion) to keep the `npm ci` no-op working; the version
+// pin guarantees `npx` resolves a `dt-clean` new enough to honor it.
+const AUTO = `DT_CLEAN_NPM_COMMAND="$npm_command" npx dt-clean@^${version} --auto`;
 
 // listed most-preferred first: the `dependencies` event itself, then its `post`/`pre` hooks.
 const HOOKS = /** @type {const} */ ([
@@ -14,6 +20,15 @@ const HOOKS = /** @type {const} */ ([
 	'postdependencies',
 	'predependencies',
 ]);
+
+// a standalone `dt-clean … --auto` invocation we authored (any era: bare, `npx`-wrapped, version
+// pinned, and/or command-forwarding), which we may therefore safely relocate or upgrade in place.
+const OWNED = /^(?:DT_CLEAN_NPM_COMMAND="\$npm_command" )?(?:npx )?dt-clean(?:@\S+)? --auto$/;
+
+/** @param {string | undefined} script */
+function isOwned(script) {
+	return typeof script === 'string' && OWNED.test(script);
+}
 
 /** @param {string | undefined} script */
 function hasAuto(script) {
@@ -37,8 +52,7 @@ export default async function setup(cwd) {
 	/** @type {NonNullable<PackageJSON['scripts']>} */
 	const scripts = { ...pkg.scripts };
 
-	// a standalone `dt-clean --auto` we wrote ourselves, which we may therefore safely relocate.
-	const owned = HOOKS.find((hook) => scripts[hook] === AUTO);
+	const owned = HOOKS.find((hook) => isOwned(scripts[hook]));
 
 	if (!owned) {
 		// a `dt-clean --auto` we didn't write (chained or customized): leave it exactly as-is.
@@ -53,22 +67,27 @@ export default async function setup(cwd) {
 		}
 	}
 
-	// the most-preferred hook our invocation should occupy: free, or already holding it.
-	const target = HOOKS.find((hook) => !scripts[hook] || scripts[hook] === AUTO);
-
-	if (owned && owned === target) {
-		return { action: 'present', script: owned };
-	}
+	// the most-preferred hook our invocation should occupy: free, or already holding one of ours.
+	const target = HOOKS.find((hook) => !scripts[hook] || isOwned(scripts[hook]));
 
 	/** @type {SetupResult} */
 	let result;
 	if (target) {
-		if (owned) {
-			// a more-preferred hook is now free: relocate to it.
+		if (owned && owned !== target) {
+			// a more-preferred hook is now free: relocate (and bring the current form with us).
 			delete scripts[owned];
+			scripts[target] = AUTO;
+			result = { action: 'moved', script: target };
+		} else if (owned === target && scripts[target] === AUTO) {
+			return { action: 'present', script: owned };
+		} else if (owned) {
+			// our invocation is already best-placed but written in an older form: upgrade it in place.
+			scripts[target] = AUTO;
+			result = { action: 'upgraded', script: target };
+		} else {
+			scripts[target] = AUTO;
+			result = { action: 'set', script: target };
 		}
-		scripts[target] = AUTO;
-		result = { action: owned ? 'moved' : 'set', script: target };
 	} else {
 		// every hook is occupied, so chain onto `dependencies` rather than clobber anything.
 		scripts.dependencies = `${scripts.dependencies} && ${AUTO}`;

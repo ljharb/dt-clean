@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { createRequire } from 'module';
 
 import applyChanges from '#/applyChanges';
 import formatReport from '#/report';
@@ -23,6 +24,9 @@ import exitCode, {
 
 const root = dirname(fileURLToPath(import.meta.url));
 const binPath = join(root, '..', 'bin.mjs');
+
+const { version: selfVersion } = createRequire(import.meta.url)('../package.json');
+const AUTO = `DT_CLEAN_NPM_COMMAND="$npm_command" npx dt-clean@^${selfVersion} --auto`;
 
 /** @import { Test } from 'tape' */
 
@@ -409,22 +413,29 @@ function runBin(args, { cwd, env } = {}) {
  * test runner itself sets both. `lifecycle` defaults to `'dependencies'` (where `--auto` is meant to
  * run); pass `false` to simulate `--auto` invoked outside a `dependencies` lifecycle script.
  *
- * @type {(opts?: { command?: string, lifecycle?: string | false }) => NodeJS.ProcessEnv}
+ * `forwarded` sets `DT_CLEAN_NPM_COMMAND`, the variable a `npx`-wrapped `dependencies` script uses
+ * to forward the real command past npx (which would otherwise erase it).
+ *
+ * @type {(opts?: { command?: string, lifecycle?: string | false, forwarded?: string }) => NodeJS.ProcessEnv}
  */
-function envWith({ command, lifecycle = 'dependencies' } = {}) {
+function envWith({ command, lifecycle = 'dependencies', forwarded } = {}) {
 	// indexed by string variables so neither `camelcase` (dot access) nor `dot-notation` (bracket
 	// access) fires on these intentionally snake_cased npm environment variables.
 	const COMMAND = 'npm_command';
 	const LIFECYCLE = 'npm_lifecycle_event';
+	const FORWARDED = 'DT_CLEAN_NPM_COMMAND';
 
 	// eslint-disable-next-line no-unused-vars
-	const { [COMMAND]: _, [LIFECYCLE]: __, ...env } = process.env;
+	const { [COMMAND]: _, [LIFECYCLE]: __, [FORWARDED]: ___, ...env } = process.env;
 
 	if (typeof command === 'string') {
 		env[COMMAND] = command;
 	}
 	if (typeof lifecycle === 'string') {
 		env[LIFECYCLE] = lifecycle;
+	}
+	if (typeof forwarded === 'string') {
+		env[FORWARDED] = forwarded;
 	}
 	return env;
 }
@@ -698,6 +709,91 @@ test('bin: --auto in an unrelated lifecycle script refuses to run', (t) => {
 	t.end();
 });
 
+test('bin: --auto via `npx` (lifecycle `npx`) is allowed, not rejected as misuse', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx', forwarded: 'install' }) });
+
+	t.doesNotMatch(stderr, /only runs inside a `dependencies`/, 'an `npx` invocation is not treated as misuse');
+	t.equal(status, 0, 'exits zero');
+	t.end();
+});
+
+test('bin: --auto via `npx` with a forwarded `install` applies the changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx', forwarded: 'install' }) });
+
+	const pkg = JSON.parse(`${readFileSync(join(dir, 'package.json'))}`);
+	t.notOk('dependencies' in pkg, 'applies when `npx` forwards a non-`ci` command');
+	t.equal(status, 0, 'exits zero after applying');
+	t.end();
+});
+
+test('bin: --auto via `npx` with a forwarded `ci` reports but makes no changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { stdout, stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx', forwarded: 'ci' }) });
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'leaves `package.json` unchanged under a forwarded `npm ci`');
+	t.match(stdout, /@types\/orphan\s+present\s+remove/, 'still prints the dry-run report of what would change');
+	t.match(stderr, /`npm ci` detected/, 'explains the `npm ci` no-op');
+	t.equal(status, 0, 'exits zero so the install never fails');
+	t.end();
+});
+
+test('bin: --auto via `npx` with no forwarded command errors with the fix', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { stdout, stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx' }) });
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no changes (errors before touching `package.json`)');
+	t.equal(stdout, '', 'prints no report');
+	t.match(stderr, /needs the real npm command forwarded in `DT_CLEAN_NPM_COMMAND`/, 'explains what is missing');
+	t.match(stderr, /DT_CLEAN_NPM_COMMAND="\$npm_command" npx dt-clean --auto/, 'shows the fix');
+	t.equal(status, 1, 'exits nonzero so the misconfiguration is loud');
+	t.end();
+});
+
+test('bin: --auto via `npx` with an unexpanded forwarded command errors too', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx', forwarded: '$npm_command' }) });
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'a literal, unexpanded `$npm_command` counts as missing, so it errors rather than guess');
+	t.match(stderr, /needs the real npm command forwarded/, 'explains the problem');
+	t.equal(status, 1, 'exits nonzero');
+	t.end();
+});
+
 /** @param {string} dir */
 function readScripts(dir) {
 	return JSON.parse(`${readFileSync(join(dir, 'package.json'))}`).scripts;
@@ -711,7 +807,7 @@ test('setup: uses the `dependencies` event when it is free', async (t) => {
 	t.deepEqual(result, { action: 'set', script: 'dependencies' }, 'reports the slot it used');
 	t.deepEqual(
 		readScripts(dir),
-		{ test: 'tape', dependencies: 'dt-clean --auto' },
+		{ test: 'tape', dependencies: AUTO },
 		'adds the `dependencies` script and preserves the existing ones',
 	);
 
@@ -726,7 +822,7 @@ test('setup: falls back to `postdependencies` when `dependencies` is taken', asy
 	t.deepEqual(result, { action: 'set', script: 'postdependencies' }, 'uses the `post` hook');
 	t.deepEqual(
 		readScripts(dir),
-		{ dependencies: 'do-something', postdependencies: 'dt-clean --auto' },
+		{ dependencies: 'do-something', postdependencies: AUTO },
 		'leaves the existing `dependencies` script untouched',
 	);
 
@@ -746,7 +842,7 @@ test('setup: falls back to `predependencies` when `dependencies` and `postdepend
 	const result = await setup(dir);
 
 	t.deepEqual(result, { action: 'set', script: 'predependencies' }, 'uses the `pre` hook');
-	t.equal(readScripts(dir).predependencies, 'dt-clean --auto', 'adds the `predependencies` script');
+	t.equal(readScripts(dir).predependencies, AUTO, 'adds the `predependencies` script');
 
 	t.end();
 });
@@ -765,7 +861,7 @@ test('setup: chains onto `dependencies` when every hook is occupied', async (t) 
 	const result = await setup(dir);
 
 	t.deepEqual(result, { action: 'chained', script: 'dependencies' }, 'reports that it chained');
-	t.equal(readScripts(dir).dependencies, 'b && dt-clean --auto', 'appends without dropping the original command');
+	t.equal(readScripts(dir).dependencies, `b && ${AUTO}`, 'appends without dropping the original command');
 
 	t.end();
 });
@@ -782,14 +878,36 @@ test('setup: is idempotent when already wired (even inside a chained script)', a
 	t.end();
 });
 
-test('setup: leaves a standalone invocation alone when it is already best-placed', async (t) => {
-	const dir = project(t, { pkg: { scripts: { dependencies: 'dt-clean --auto' } } });
+test('setup: leaves the current standalone invocation alone when it is already best-placed', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: AUTO } } });
 	const before = `${readFileSync(join(dir, 'package.json'))}`;
 
 	const result = await setup(dir);
 
 	t.deepEqual(result, { action: 'present', script: 'dependencies' }, 'already in the preferred slot');
 	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no change');
+
+	t.end();
+});
+
+test('setup: upgrades a legacy standalone invocation in place', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: 'dt-clean --auto' } } });
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'upgraded', script: 'dependencies' }, 'reports the in-place upgrade');
+	t.equal(readScripts(dir).dependencies, AUTO, 'rewrites the bare invocation to the forwarding form');
+
+	t.end();
+});
+
+test('setup: upgrades a legacy `npx`-wrapped, version-pinned invocation in place', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: 'npx dt-clean@^1.1.1 --auto' } } });
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'upgraded', script: 'dependencies' }, 'recognizes the older `npx` form as ours');
+	t.equal(readScripts(dir).dependencies, AUTO, 'upgrades it to forward the command');
 
 	t.end();
 });
@@ -802,7 +920,7 @@ test('setup: moves a standalone invocation to a now-free, more-preferred hook', 
 	t.deepEqual(result, { action: 'moved', script: 'dependencies' }, 'relocates from `pre` to `dependencies`');
 	t.deepEqual(
 		readScripts(dir),
-		{ dependencies: 'dt-clean --auto' },
+		{ dependencies: AUTO },
 		'the `predependencies` hook is gone and `dependencies` now holds it',
 	);
 
@@ -824,7 +942,7 @@ test('setup: moves toward the best available hook even when `dependencies` stays
 	t.deepEqual(result, { action: 'moved', script: 'postdependencies' }, 'relocates `pre` -> `post` (the best free hook)');
 	t.deepEqual(
 		readScripts(dir),
-		{ dependencies: 'build', postdependencies: 'dt-clean --auto' },
+		{ dependencies: 'build', postdependencies: AUTO },
 		'leaves the occupied `dependencies` script and moves ours up to `post`',
 	);
 
@@ -880,7 +998,7 @@ test('bin: --setup wires the script and is idempotent on a second run', (t) => {
 	const first = runBin(['--setup', dir]);
 	t.match(first.stdout, /Added `dt-clean --auto` to the `dependencies`/, 'announces the change');
 	t.equal(first.status, 0, 'exits zero');
-	t.equal(readScripts(dir).dependencies, 'dt-clean --auto', 'wires the `dependencies` script');
+	t.equal(readScripts(dir).dependencies, AUTO, 'wires the `dependencies` script');
 
 	const second = runBin(['--setup', dir]);
 	t.match(second.stdout, /already runs `dt-clean --auto`/, 'a second run is a no-op');

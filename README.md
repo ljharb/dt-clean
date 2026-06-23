@@ -47,8 +47,8 @@ With `--update` (`-u`), `dt-clean` edits `package.json` in place - adding, movin
 ### Options
 
 - `-u`, `--update`: apply the changes to `package.json` (default: report only).
-- `--setup`: idempotently wire `dt-clean --auto` into a `dependencies` lifecycle script, without overwriting any existing script (see [Automatic cleanup](#automatic-cleanup)).
-- `--auto`: for use in a `dependencies` lifecycle script - apply the changes like `--update` during `npm install`, but during `npm ci` only print what would change and exit `0` (see [Automatic cleanup](#automatic-cleanup)).
+- `--setup`: idempotently wire (or upgrade) `dt-clean --auto` in a `dependencies` lifecycle script, without overwriting any script it did not author (see [Automatic cleanup](#automatic-cleanup)).
+- `--auto`: for use in a `dependencies` lifecycle script (run directly or via `npx`) - apply the changes like `--update` during `npm install`, but during `npm ci` only print what would change and exit `0`. Through `npx`, the script must forward the command in `DT_CLEAN_NPM_COMMAND` for the `npm ci` no-op to work (see [Automatic cleanup](#automatic-cleanup)).
 - `--help`: show usage.
 
 ### Automatic cleanup
@@ -63,29 +63,32 @@ npx dt-clean --setup
 
 `--setup` edits `package.json` for you and is safe to run anywhere:
 
-- if you have no `dependencies` script, it adds `"dependencies": "dt-clean --auto"`;
-- if you already have one, it adds `dt-clean --auto` to a free `postdependencies` (or `predependencies`) hook instead, so your existing script is never touched - and if every hook is taken, it appends `&& dt-clean --auto` to your `dependencies` script rather than clobbering it;
-- if it already added `dt-clean --auto` to a `post`/`pre` hook and the preferred `dependencies` slot later frees up, re-running moves it back to the most-preferred available hook;
-- if `dt-clean --auto` is already in the best available hook, it does nothing; and if some other `dt-clean` invocation (or a customized one you wrote) is already present, it leaves that alone rather than adding a duplicate.
+- if you have no `dependencies` script, it adds one that runs `dt-clean --auto` via `npx` (so `dt-clean` itself need not be a dependency);
+- if you already have one, it adds the invocation to a free `postdependencies` (or `predependencies`) hook instead, so your existing script is never touched - and if every hook is taken, it appends `&& …` to your `dependencies` script rather than clobbering it;
+- if it already placed the invocation in a `post`/`pre` hook and the preferred `dependencies` slot later frees up, re-running moves it back to the most-preferred available hook;
+- if an older form of the invocation it authored is present (a bare `dt-clean --auto`, or one without the command-forwarding prefix), re-running **upgrades it in place** to the current form;
+- if the current invocation is already in the best available hook, it does nothing; and if some other `dt-clean` invocation (or a customized one you wrote) is already present, it leaves that alone rather than adding a duplicate.
 
-It only ever manages this one invocation and leaves the rest of your `package.json` (and its formatting) alone, so it's safe to re-run - repeated runs converge on the same result. That result is simply the equivalent of:
+It only ever manages this one invocation and leaves the rest of your `package.json` (and its formatting) alone, so it's safe to re-run - repeated runs converge on the same result. That result is the equivalent of:
 
 ```json
 {
   "scripts": {
-    "dependencies": "dt-clean --auto"
+    "dependencies": "DT_CLEAN_NPM_COMMAND=\"$npm_command\" npx dt-clean@^1.2.0 --auto"
   }
 }
 ```
 
-Once it's wired in, `dt-clean --auto` inspects `npm_command` to decide what to do:
+The `DT_CLEAN_NPM_COMMAND="$npm_command"` prefix is why this looks more involved than a bare `dt-clean --auto`: `npx` (`npm exec`) runs `dt-clean` in a fresh environment where npm's own `npm_command` has been overwritten (to `exec`), so without this forward `dt-clean` could not tell `npm install` from `npm ci`. The prefix copies the real command into a variable that survives `npx`, which `dt-clean` reads back. (It is a POSIX-shell expansion, matching npm's default script shell on macOS and Linux.)
+
+Once it's wired in, `dt-clean --auto` decides what to do from the npm command - read straight from `npm_command` when invoked directly, or from the forwarded `DT_CLEAN_NPM_COMMAND` when invoked through `npx`:
 
 - under `npm install`, it applies the changes for you, so a fresh install keeps your `@types/*` set tidy automatically;
 - under `npm ci` (typically used in CI pipelines, where `package.json` must not be mutated), it only prints what would change and exits `0`, so it never edits a checked-in file and never fails the install.
 
-When `npm_command` is anything else (or absent), `--auto` applies the changes, exactly as under `npm install`.
+When invoked directly and `npm_command` is anything else (or absent), `--auto` applies the changes, exactly as under `npm install`. When invoked through `npx` *without* a forwarded command (for example a hand-written `npx dt-clean --auto` that omits the prefix), `dt-clean` cannot tell `install` from `ci`, so rather than risk mutating `package.json` during a `ci` it **errors and exits nonzero**, printing the prefix to add (or just run `dt-clean --setup`). It never guesses.
 
-To avoid surprising edits, `--auto` runs *only* inside the `dependencies` lifecycle (or its `predependencies`/`postdependencies` hooks): it checks `npm_lifecycle_event`, and if it is invoked any other way (for example directly from the shell) it refuses to do anything and exits nonzero. Use `--update` to apply changes manually.
+To avoid surprising edits, `--auto` runs *only* inside the `dependencies` lifecycle (or its `predependencies`/`postdependencies` hooks), or via `npx`: it checks `npm_lifecycle_event`, and if it is invoked any other way (for example directly from the shell) it refuses to do anything and exits nonzero. Use `--update` to apply changes manually.
 
 ### Exit codes
 
