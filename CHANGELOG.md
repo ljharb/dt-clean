@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.2.0](https://github.com/ljharb/dt-clean/compare/v1.1.1...v1.2.0) - 2026-06-22
+
+### Commits
+
+- [New] `--auto`: support running via `npx`, forwarding the npm command for the `npm ci` no-op [`88732ca`](https://github.com/ljharb/dt-clean/commit/88732ca9e9a9c28933a8adfde68f5b565d6e1a82)
+
 ## [v1.1.1](https://github.com/ljharb/dt-clean/compare/v1.1.0...v1.1.1) - 2026-06-21
 
 ### Commits
