@@ -8,7 +8,7 @@ import { mangleScopedPackage, typesPackageNameToRealName } from '@definitelytype
 import hasTypes from 'hastypes';
 import semver from 'semver';
 
-/** @import getDelTA, { DTPackage, Version } from './getDelTa.d.ts' */
+/** @import { DTPackage, Version } from './getDelTa.d.ts' */
 /** @import { PackageJSON } from './types/types.d.ts'*/
 
 /** @type {<T>(entry: [string, T]) => entry is [DTPackage, T]} */
@@ -26,7 +26,7 @@ function fromDTName(name) {
 	return typesPackageNameToRealName(name);
 }
 
-/** @type {getDelTA} */
+/** @type {typeof import('./getDelTa.d.ts')} */
 export default async function getDelTa(cwd = process.cwd()) {
 	const packageJSONpath = join(cwd, 'package.json');
 	const anchor = pathToFileURL(packageJSONpath);

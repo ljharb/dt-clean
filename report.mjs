@@ -60,7 +60,7 @@ function table(headers, rows) {
 	).join('\n');
 }
 
-/** @type {import('./report.d.ts')} */
+/** @type {typeof import('./report.d.ts')} */
 export default function formatReport(delta) {
 	const rows = toRows(delta);
 	if (rows.length === 0) {

@@ -41,7 +41,7 @@ function hasDtClean(script) {
 	return typeof script === 'string' && (/\bdt-clean\b/).test(script);
 }
 
-/** @type {import('./setup.d.ts')} */
+/** @type {typeof import('./setup.d.ts')} */
 export default async function setup(cwd) {
 	const packageJSONpath = join(cwd, 'package.json');
 	const raw = `${await readFile(packageJSONpath)}`;

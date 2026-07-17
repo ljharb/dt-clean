@@ -10,7 +10,7 @@ function sortKeys(obj) {
 
 /** @import { PackageJSON } from './types/types.d.ts' */
 
-/** @type {import('./applyChanges.d.ts')} */
+/** @type {typeof import('./applyChanges.d.ts')} */
 export default async function applyChanges(cwd, {
 	toAdd,
 	toMove,
