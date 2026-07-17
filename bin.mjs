@@ -2,13 +2,33 @@
 
 import { resolve } from 'path';
 
-import pargs from 'pargs';
+// deliberately a relative specifier rather than `#/checkNodeVersion`: resolving a `#/` specifier is
+// itself what fails on an unsupported node, so the check has to be reachable without one.
+import checkNodeVersion from './checkNodeVersion.mjs';
 
-import getDelTa from '#/getDelTa';
-import applyChanges from '#/applyChanges';
-import formatReport from '#/report';
-import exitCode from '#/exitCode';
-import setupScripts from '#/setup';
+const unsupported = checkNodeVersion();
+if (unsupported) {
+	console.error(unsupported);
+	process.exit(1);
+}
+
+// deferred to dynamic imports so the check above gets to run: static imports are resolved before any
+// of this module executes, and on an unsupported node that resolution is exactly what throws.
+const [
+	{ default: pargs },
+	{ default: getDelTa },
+	{ default: applyChanges },
+	{ default: formatReport },
+	{ default: exitCode },
+	{ default: setupScripts },
+] = await Promise.all([
+	import('pargs'),
+	import('#/getDelTa'),
+	import('#/applyChanges'),
+	import('#/report'),
+	import('#/exitCode'),
+	import('#/setup'),
+]);
 
 const {
 	values: {

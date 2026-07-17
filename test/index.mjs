@@ -9,7 +9,7 @@ import {
 	rmSync,
 } from 'fs';
 import { tmpdir } from 'os';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { createRequire } from 'module';
 
@@ -397,10 +397,10 @@ test('formatReport: singular summary and empty case', (t) => {
 
 /**
  * @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv }} [opts]
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, nodeArgs?: string[] }} [opts]
  */
-function runBin(args, { cwd, env } = {}) {
-	const { stdout, stderr, status } = spawnSync('node', [binPath, ...args], {
+function runBin(args, { cwd, env, nodeArgs = [] } = {}) {
+	const { stdout, stderr, status } = spawnSync('node', [...nodeArgs, binPath, ...args], {
 		cwd,
 		encoding: 'utf8',
 		env,
@@ -1003,6 +1003,26 @@ test('bin: --setup wires the script and is idempotent on a second run', (t) => {
 	const second = runBin(['--setup', dir]);
 	t.match(second.stdout, /already runs `dt-clean --auto`/, 'a second run is a no-op');
 	t.equal(second.status, 0, 'still exits zero');
+
+	t.end();
+});
+
+test('bin: an unsupported node is named, not left to crash on `#/` resolution', (t) => {
+	const dir = project(t, { pkg: { scripts: { test: 'tape' } } });
+
+	const { stdout, stderr, status } = runBin(['--setup', dir], {
+		nodeArgs: ['--import', pathToFileURL(join(root, 'helpers', 'fakeUnsupportedNode.mjs')).href],
+	});
+
+	t.match(
+		stderr,
+		/^dt-clean v\d+\.\d+\.\d+ requires node `[^`]+`, but this is node v18\.0\.0\. Upgrade node to run it\.$/m,
+		'names the supported range and the running version',
+	);
+	t.doesNotMatch(stderr, /ERR_INVALID_MODULE_SPECIFIER/, 'never reaches the `#/` subpath imports');
+	t.equal(status, 1, 'exits nonzero');
+	t.equal(stdout, '', 'says nothing on stdout');
+	t.deepEqual(readScripts(dir), { test: 'tape' }, 'and touches nothing');
 
 	t.end();
 });
