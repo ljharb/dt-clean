@@ -9,10 +9,10 @@ import detectIndent from '#/detectIndent';
 
 const { version } = createRequire(import.meta.url)('./package.json');
 
-// run through `npx`, npm erases the real `npm_command`, so the script forwards it in
-// `DT_CLEAN_NPM_COMMAND` (a POSIX-shell expansion) to keep the `npm ci` no-op working; the version
-// pin guarantees `npx` resolves a `dt-clean` new enough to honor it.
-const AUTO = `DT_CLEAN_NPM_COMMAND="$npm_command" npx dt-clean@^${version} --auto`;
+// npx erases the real `npm_command`, and no version-range escape survives both cmd.exe and POSIX
+// shells, so the script pipes the command into stdin to keep the `npm ci` no-op working; the quotes
+// keep cmd.exe from eating the caret, and the version pin resolves a `dt-clean` new enough to read it.
+const AUTO = `node -p "process.env.npm_command" | npx "dt-clean@^${version}" --auto`;
 
 // listed most-preferred first: the `dependencies` event itself, then its `post`/`pre` hooks.
 const HOOKS = /** @type {const} */ ([
@@ -22,8 +22,8 @@ const HOOKS = /** @type {const} */ ([
 ]);
 
 // a standalone `dt-clean … --auto` invocation we authored (any era: bare, `npx`-wrapped, version
-// pinned, and/or command-forwarding), which we may therefore safely relocate or upgrade in place.
-const OWNED = /^(?:DT_CLEAN_NPM_COMMAND="\$npm_command" )?(?:npx )?dt-clean(?:@\S+)? --auto$/;
+// pinned, env-forwarding, or the current stdin-piped form), which we may relocate or upgrade in place.
+const OWNED = /^(?:(?:DT_CLEAN_NPM_COMMAND="\$npm_command" )?(?:npx )?dt-clean(?:@\S+)? --auto|node -p "process\.env\.npm_command" \| npx (?:"dt-clean(?:@[^"]+)?"|dt-clean(?:@\S+)?) --auto)$/;
 
 /** @param {string | undefined} script */
 function isOwned(script) {

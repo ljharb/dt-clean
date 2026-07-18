@@ -45,7 +45,7 @@ const {
 	options: {
 		auto: {
 			default: false,
-			description: 'for a `dependencies` lifecycle script (or its `pre`/`post` hooks, or run via `npx`): apply the changes like `--update` during `npm install`, but during `npm ci` only print what would change and exit zero. Through `npx`, forward the command in `DT_CLEAN_NPM_COMMAND` (see the README) so the `npm ci` no-op still works',
+			description: 'for a `dependencies` lifecycle script (or its `pre`/`post` hooks, or run via `npx`): apply the changes like `--update` during `npm install`, but during `npm ci` only print what would change and exit zero. Through `npx`, pipe the command into stdin (see the README) so the `npm ci` no-op still works',
 			type: 'boolean',
 		},
 		json: {
@@ -89,17 +89,49 @@ const DEPENDENCY_HOOKS = [
 
 // `npx` (`npm exec`) re-stamps `npm_lifecycle_event` to `npx` and overwrites the real `npm_command`
 // with `exec`, so when a `dependencies` script runs `dt-clean` through `npx` the original command is
-// only knowable if the script forwarded it in `DT_CLEAN_NPM_COMMAND` (see the README).
+// only knowable if the script forwarded it (see the README).
 const viaNpx = lifecycleEvent === 'npx';
 
-// a forward that did not expand (e.g. a literal `$npm_command` from a shell that left it alone) is
-// not a real command, so only an actual npm subcommand name counts as forwarded.
-const forwarded = typeof forwardedCommand === 'string' && (/^[a-z-]+$/).test(forwardedCommand)
-	? forwardedCommand
-	: undefined;
+/**
+ * only an actual npm subcommand name counts: a value that did not expand (a literal `$npm_command`),
+ * or empty input, is not a command.
+ * @param {string | undefined} value
+ */
+function asCommand(value) {
+	const trimmed = typeof value === 'string' ? value.trim() : '';
+	return (/^[a-z-]+$/).test(trimmed) ? trimmed : undefined;
+}
 
-// the command npm is really running: straight from npm when invoked directly, or the forwarded value
-// when invoked through `npx` (where `npm_command` is unavailable).
+// the portable `dependencies` script pipes `node -p "process.env.npm_command"` into stdin, because
+// npx erases the real command and no version-range escape survives both cmd.exe and POSIX shells.
+// read it only when a pipe is attached, and never block a running install on a stdin left open.
+async function pipedCommand() {
+	if (process.stdin.isTTY) {
+		return undefined;
+	}
+	const { text } = await import('stream/consumers');
+	const timer = setTimeout(() => process.stdin.destroy(), 10000);
+	timer.unref();
+	try {
+		return asCommand(await text(process.stdin));
+	} catch {
+		// destroyed by the timeout, or a read error: treat it as nothing forwarded
+		return undefined;
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+// the command npm is really running: straight from npm when invoked directly; through `npx` it comes
+// from the piped stdin, falling back to the legacy `DT_CLEAN_NPM_COMMAND` env var that older setups
+// forward (checked first, so those scripts never touch stdin).
+let forwarded;
+if (auto && viaNpx) {
+	forwarded = asCommand(forwardedCommand);
+	if (!forwarded) {
+		forwarded = await pipedCommand();
+	}
+}
 const effectiveCommand = viaNpx ? forwarded : npmCommand;
 
 if (setup) {
@@ -116,9 +148,9 @@ if (setup) {
 	console.error('`--auto` only runs inside a `dependencies` (or `pre`/`postdependencies`) lifecycle script, or via `npx` (see the README); use `--update` to apply changes manually.');
 	process.exitCode = 1;
 } else if (auto && viaNpx && !forwarded) {
-	// run through `npx`, npm has already erased the real `npm_command`, so without the forwarded value
+	// run through `npx`, npm has already erased the real `npm_command`, so without the piped value
 	// `--auto` cannot tell `npm install` from `npm ci`; rather than guess, fail loudly with the fix.
-	console.error('`--auto` run via `npx` needs the real npm command forwarded in `DT_CLEAN_NPM_COMMAND`, which `npx` otherwise erases. Use `DT_CLEAN_NPM_COMMAND="$npm_command" npx dt-clean --auto` as your `dependencies` script (or run `dt-clean --setup` to write it); use `--update` to apply changes manually.');
+	console.error('`--auto` run via `npx` needs the real npm command, which `npx` otherwise erases. Pipe it in with `node -p "process.env.npm_command" | npx dt-clean --auto` as your `dependencies` script (or run `dt-clean --setup` to write it); use `--update` to apply changes manually.');
 	process.exitCode = 1;
 } else {
 	const {

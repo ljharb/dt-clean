@@ -26,7 +26,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const binPath = join(root, '..', 'bin.mjs');
 
 const { version: selfVersion } = createRequire(import.meta.url)('../package.json');
-const AUTO = `DT_CLEAN_NPM_COMMAND="$npm_command" npx dt-clean@^${selfVersion} --auto`;
+const AUTO = `node -p "process.env.npm_command" | npx "dt-clean@^${selfVersion}" --auto`;
 
 /** @import { Test } from 'tape' */
 
@@ -397,13 +397,14 @@ test('formatReport: singular summary and empty case', (t) => {
 
 /**
  * @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, nodeArgs?: string[] }} [opts]
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, nodeArgs?: string[], input?: string }} [opts]
  */
-function runBin(args, { cwd, env, nodeArgs = [] } = {}) {
+function runBin(args, { cwd, env, nodeArgs = [], input } = {}) {
 	const { stdout, stderr, status } = spawnSync('node', [...nodeArgs, binPath, ...args], {
 		cwd,
 		encoding: 'utf8',
 		env,
+		input,
 	});
 	return { stdout, stderr, status };
 }
@@ -413,8 +414,8 @@ function runBin(args, { cwd, env, nodeArgs = [] } = {}) {
  * test runner itself sets both. `lifecycle` defaults to `'dependencies'` (where `--auto` is meant to
  * run); pass `false` to simulate `--auto` invoked outside a `dependencies` lifecycle script.
  *
- * `forwarded` sets `DT_CLEAN_NPM_COMMAND`, the variable a `npx`-wrapped `dependencies` script uses
- * to forward the real command past npx (which would otherwise erase it).
+ * `forwarded` sets `DT_CLEAN_NPM_COMMAND`, the legacy env var an older `npx`-wrapped `dependencies`
+ * script used to forward the real command past npx; the current form pipes it into stdin instead.
  *
  * @type {(opts?: { command?: string, lifecycle?: string | false, forwarded?: string }) => NodeJS.ProcessEnv}
  */
@@ -724,7 +725,7 @@ test('bin: --auto via `npx` (lifecycle `npx`) is allowed, not rejected as misuse
 	t.end();
 });
 
-test('bin: --auto via `npx` with a forwarded `install` applies the changes', (t) => {
+test('bin: --auto via `npx` with a legacy env-forwarded `install` applies the changes', (t) => {
 	const dir = project(t, {
 		pkg: {
 			dependencies: { '@types/orphan': '^1.0.0' },
@@ -740,7 +741,7 @@ test('bin: --auto via `npx` with a forwarded `install` applies the changes', (t)
 	t.end();
 });
 
-test('bin: --auto via `npx` with a forwarded `ci` reports but makes no changes', (t) => {
+test('bin: --auto via `npx` with a legacy env-forwarded `ci` reports but makes no changes', (t) => {
 	const dir = project(t, {
 		pkg: {
 			dependencies: { '@types/orphan': '^1.0.0' },
@@ -752,6 +753,40 @@ test('bin: --auto via `npx` with a forwarded `ci` reports but makes no changes',
 	const { stdout, stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx', forwarded: 'ci' }) });
 
 	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'leaves `package.json` unchanged under a forwarded `npm ci`');
+	t.match(stdout, /@types\/orphan\s+present\s+remove/, 'still prints the dry-run report of what would change');
+	t.match(stderr, /`npm ci` detected/, 'explains the `npm ci` no-op');
+	t.equal(status, 0, 'exits zero so the install never fails');
+	t.end();
+});
+
+test('bin: --auto via `npx` with the command piped in applies the changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+
+	const { status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx' }), input: 'install\n' });
+
+	const pkg = JSON.parse(`${readFileSync(join(dir, 'package.json'))}`);
+	t.notOk('dependencies' in pkg, 'applies when the pipe forwards a non-`ci` command');
+	t.equal(status, 0, 'exits zero after applying');
+	t.end();
+});
+
+test('bin: --auto via `npx` with a piped `ci` reports but makes no changes', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { stdout, stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx' }), input: 'ci\n' });
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'leaves `package.json` unchanged under a piped `npm ci`');
 	t.match(stdout, /@types\/orphan\s+present\s+remove/, 'still prints the dry-run report of what would change');
 	t.match(stderr, /`npm ci` detected/, 'explains the `npm ci` no-op');
 	t.equal(status, 0, 'exits zero so the install never fails');
@@ -771,8 +806,8 @@ test('bin: --auto via `npx` with no forwarded command errors with the fix', (t) 
 
 	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no changes (errors before touching `package.json`)');
 	t.equal(stdout, '', 'prints no report');
-	t.match(stderr, /needs the real npm command forwarded in `DT_CLEAN_NPM_COMMAND`/, 'explains what is missing');
-	t.match(stderr, /DT_CLEAN_NPM_COMMAND="\$npm_command" npx dt-clean --auto/, 'shows the fix');
+	t.match(stderr, /needs the real npm command/, 'explains what is missing');
+	t.match(stderr, /node -p "process\.env\.npm_command" \| npx dt-clean --auto/, 'shows the fix');
 	t.equal(status, 1, 'exits nonzero so the misconfiguration is loud');
 	t.end();
 });
@@ -789,7 +824,7 @@ test('bin: --auto via `npx` with an unexpanded forwarded command errors too', (t
 	const { stderr, status } = runBin(['--auto', dir], { env: envWith({ command: 'exec', lifecycle: 'npx', forwarded: '$npm_command' }) });
 
 	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'a literal, unexpanded `$npm_command` counts as missing, so it errors rather than guess');
-	t.match(stderr, /needs the real npm command forwarded/, 'explains the problem');
+	t.match(stderr, /needs the real npm command/, 'explains the problem');
 	t.equal(status, 1, 'exits nonzero');
 	t.end();
 });
@@ -907,7 +942,29 @@ test('setup: upgrades a legacy `npx`-wrapped, version-pinned invocation in place
 	const result = await setup(dir);
 
 	t.deepEqual(result, { action: 'upgraded', script: 'dependencies' }, 'recognizes the older `npx` form as ours');
-	t.equal(readScripts(dir).dependencies, AUTO, 'upgrades it to forward the command');
+	t.equal(readScripts(dir).dependencies, AUTO, 'upgrades it to the piped form');
+
+	t.end();
+});
+
+test('setup: upgrades a legacy env-forwarding invocation to the portable piped form', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: 'DT_CLEAN_NPM_COMMAND="$npm_command" npx dt-clean@^1.2.0 --auto' } } });
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'upgraded', script: 'dependencies' }, 'recognizes the POSIX-only env form as ours');
+	t.equal(readScripts(dir).dependencies, AUTO, 'rewrites it to the portable piped form that also runs on cmd.exe');
+
+	t.end();
+});
+
+test('setup: refreshes an already-piped invocation whose version pin (or quoting) is stale', async (t) => {
+	const dir = project(t, { pkg: { scripts: { dependencies: 'node -p "process.env.npm_command" | npx dt-clean@^0.9.0 --auto' } } });
+
+	const result = await setup(dir);
+
+	t.deepEqual(result, { action: 'upgraded', script: 'dependencies' }, 'recognizes an earlier iteration of the piped snippet as ours');
+	t.equal(readScripts(dir).dependencies, AUTO, 'refreshes the pin and quoting to the current snippet');
 
 	t.end();
 });
