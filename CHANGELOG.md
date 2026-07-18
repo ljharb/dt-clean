@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.2.1](https://github.com/ljharb/dt-clean/compare/v1.2.0...v1.2.1) - 2026-07-17
+
+### Commits
+
+- [Fix] `--setup`: forward the npm command through a stdin pipe, so the auto script runs on Windows [`7b31f35`](https://github.com/ljharb/dt-clean/commit/7b31f356191f32b2eb81ff07044c389a1f58ece6)
+- [Fix] name an unsupported node version instead of crashing on `#/` resolution [`2e758ef`](https://github.com/ljharb/dt-clean/commit/2e758ef670c6031ac4d8d70dff7bcf45f10e7ed9)
+- [types] fix an error TS v6 ignores but v7 fails on [`2b985f7`](https://github.com/ljharb/dt-clean/commit/2b985f733dc915a57493a0a61f2170499ca0adf0)
+- [Dev Deps] update `@arethetypeswrong/cli`, `@types/node`, `eslint`, `globals` [`52fc57d`](https://github.com/ljharb/dt-clean/commit/52fc57de3333593bfa4bb130566259755b2710a8)
+
 ## [v1.2.0](https://github.com/ljharb/dt-clean/compare/v1.1.1...v1.2.0) - 2026-06-22
 
 ### Commits
