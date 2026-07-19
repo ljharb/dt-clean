@@ -8,6 +8,12 @@ import checkNodeVersion from './checkNodeVersion.mjs';
 
 const unsupported = checkNodeVersion();
 if (unsupported) {
+	// `--auto` runs from a `dependencies` lifecycle script during `npm install`; refusing there would
+	// fail the whole install just because this node is older than dt-clean supports, so skip quietly.
+	// every other invocation gets the error and a nonzero exit.
+	if (process.argv.includes('--auto')) {
+		process.exit(0);
+	}
 	console.error(unsupported);
 	process.exit(1);
 }

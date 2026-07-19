@@ -90,6 +90,8 @@ When invoked directly and `npm_command` is anything else (or absent), `--auto` a
 
 To avoid surprising edits, `--auto` runs *only* inside the `dependencies` lifecycle (or its `predependencies`/`postdependencies` hooks), or via `npx`: it checks `npm_lifecycle_event`, and if it is invoked any other way (for example directly from the shell) it refuses to do anything and exits nonzero. Use `--update` to apply changes manually.
 
+On a node older than dt-clean's own `engines.node`, `--auto` skips silently and exits `0` rather than fail the install, so wiring it into a project with a wide node-version matrix is safe - the cleanup simply no-ops on the versions that can't run it. (Any other invocation on an unsupported node still prints the version it needs and exits nonzero.)
+
 ### Exit codes
 
 In the default report-only mode, the exit code is a bitmask of the kinds of pending changes, so a clean project exits `0` and you can fail CI (or a `git` pre-commit hook) on drift:

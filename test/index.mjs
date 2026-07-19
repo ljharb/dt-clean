@@ -1083,3 +1083,24 @@ test('bin: an unsupported node is named, not left to crash on `#/` resolution', 
 
 	t.end();
 });
+
+test('bin: --auto on an unsupported node skips quietly instead of failing the install', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { stdout, stderr, status } = runBin(['--auto', dir], {
+		nodeArgs: ['--import', pathToFileURL(join(root, 'helpers', 'fakeUnsupportedNode.mjs')).href],
+	});
+
+	t.equal(status, 0, 'exits zero so a `dependencies` hook never fails the install on an old node');
+	t.equal(stdout, '', 'says nothing on stdout');
+	t.equal(stderr, '', 'and nothing on stderr');
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'touches nothing');
+
+	t.end();
+});
