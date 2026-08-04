@@ -37,7 +37,7 @@
 	},
 	"homepage": "https://github.com/ljharb/dt-clean#readme",
 	"dependencies": {
-		"@definitelytyped/utils": "^0.1.14",
+		"@definitelytyped/utils": "^0.1.15",
 		"es-errors": "^1.3.0",
 		"hastypes": "^4.0.4",
 		"pargs": "^1.4.2",
