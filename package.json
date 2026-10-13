@@ -76,9 +76,10 @@
 	"publishConfig": {
 		"ignore": [
 			".github/workflows",
-			".c8rc.json",
+			".nycrc",
 			"eslint.config.mjs",
 			"test",
+			"tsconfig.json",
 			"types"
 		]
 	}
