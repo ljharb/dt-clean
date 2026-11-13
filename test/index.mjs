@@ -585,6 +585,21 @@ test('exitCode: bitmasks each pending change kind', (t) => {
 	t.end();
 });
 
+test('exitCode: every combination of kinds yields its own code, 0 through 7', (t) => {
+	// type-checked too: `tsc` fails here if the declared return type omits any reachable code
+	/** @type {ReturnType<typeof exitCode>[]} */
+	const expected = [0, 1, 2, 3, 4, 5, 6, 7];
+
+	const actual = expected.map((_, bits) => exitCode({
+		toAdd: new Map(bits & TO_ADD ? [['@types/a', '^1.0.0']] : []),
+		toMove: new Map(bits & TO_MOVE ? [['@types/m', '^1.0.0']] : []),
+		toRemove: bits & TO_REMOVE ? ['@types/r'] : [],
+	}));
+
+	t.deepEqual(actual, expected, 'each combination maps to the matching bitmask');
+	t.end();
+});
+
 test('bin: exits with the remove bit for a dirty project', (t) => {
 	const dir = project(t, {
 		pkg: {

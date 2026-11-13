@@ -8,7 +8,7 @@ export const TO_MOVE = 4;
 export const USAGE_ERROR = 64; // EX_USAGE: any argument-parsing error, or `--auto` outside a context it supports
 export const FAILURE = 70; // EX_SOFTWARE: an unsupported node, or any unexpected error
 
-/** @typedef {1 | 2 | 4 | 3 | 6 | 7} PossibleExitCode */
+/** @typedef {0 | 1 | 2 | 3 | 4 | 5 | 6 | 7} PossibleExitCode */
 
 /**
  * In report-only mode the exit code is a bitmask of the pending change kinds, so a clean
