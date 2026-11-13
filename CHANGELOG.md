@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.2.3](https://github.com/ljharb/dt-clean/compare/v1.2.2...v1.2.3) - 2026-11-12
+
+### Commits
+
+- [Fix] exit 64 on usage errors and 70 on other failures, instead of 1 [`2b0dd0d`](https://github.com/ljharb/dt-clean/commit/2b0dd0d434c7eec366e49b252accb6592200f868)
+- [actions] add a daily unpinned live-registry drift check [`8eb89f2`](https://github.com/ljharb/dt-clean/commit/8eb89f2fc3d86d27de3bb453a9a7a28671ad18c0)
+- [Tests] cover `--auto` via `npx` when stdin is a terminal, or fails to read [`95fdd3d`](https://github.com/ljharb/dt-clean/commit/95fdd3d3ee60d3673949e27dae6ee5b7b6e5d391)
+- [Tests] pin live fixture regeneration to a fixed registry date [`a82f5d3`](https://github.com/ljharb/dt-clean/commit/a82f5d3808c7ba354a1b138af9566d338089e06e)
+- [types] `exitCode`: include `0` and `5` in the return type [`3950262`](https://github.com/ljharb/dt-clean/commit/3950262fe66111d421ad7c6d62a1d84c656afcdc)
+- [Dev Deps] update `@ljharb/eslint-config`, `@types/node`, `auto-changelog`, `c8`, `eslint`, `esmock`, `globals` [`0826d11`](https://github.com/ljharb/dt-clean/commit/0826d11442040ab48cd42c95f401ae299d1c82db)
+- [Fix] print usage to stderr on a bad option, keeping stdout clean for `--json` [`a1489a3`](https://github.com/ljharb/dt-clean/commit/a1489a3d2462f5a1b9a3846c018735e592832be6)
+- [Deps] update `@definitelytyped/utils`, `hastypes`, `pargs`, `semver` [`0dcc4bc`](https://github.com/ljharb/dt-clean/commit/0dcc4bcfaf1e610c6dd817061b88863b1dfe09b0)
+- [Dev Deps] update `c8`, `esmock`, `npmignore`, `tape` [`971bdd8`](https://github.com/ljharb/dt-clean/commit/971bdd89d9b3a5d57423e96701eb2580c74c8ffd)
+- [Dev Deps] update `eslint`, `esmock`, `globals` [`41c7115`](https://github.com/ljharb/dt-clean/commit/41c7115d59db2dc1c1044365c4f12ef463840bf9)
+- [Tests] update fixtures [`a28d0ac`](https://github.com/ljharb/dt-clean/commit/a28d0ac585d09520cd058ec375a6d835a0aaffb7)
+- [Dev Deps] update `@types/semver`, `eslint`, `globals` [`637d9c4`](https://github.com/ljharb/dt-clean/commit/637d9c4623c58932b5304639dce04118f915fc72)
+- [Tests] update fixtures [`49016ca`](https://github.com/ljharb/dt-clean/commit/49016ca49638e60c235519c99175f94c8468b276)
+- [Refactor] `pipedCommand`: return once, after the `try`/`finally` [`beee1f9`](https://github.com/ljharb/dt-clean/commit/beee1f93a1f21bfd0757b140a402c221c5fa2fbc)
+- [actions] set least-privilege `cache-mode` [`c0d9cd3`](https://github.com/ljharb/dt-clean/commit/c0d9cd3f25c2415fc1f5feff50b5f95e1dced877)
+- [meta] fix `publishConfig.ignore`: exclude `.nycrc` and `tsconfig.json` [`a8d251c`](https://github.com/ljharb/dt-clean/commit/a8d251c863f653af0bed699f4bc075b0ad86d07b)
+- [Deps] update `pargs` [`c9c5e53`](https://github.com/ljharb/dt-clean/commit/c9c5e530c4516b6be51f343d2833773a91f03ce5)
+- [Deps] update `pargs` [`a9c5b9d`](https://github.com/ljharb/dt-clean/commit/a9c5b9d461b0008b91a1e3f77c95af3f34a69a00)
+- [Deps] update `@definitelytyped/utils` [`3d621a8`](https://github.com/ljharb/dt-clean/commit/3d621a839c50092f1d68104a4cfb2c67750ffb1c)
+- [meta] ignore &lt;= moderate issues [`0d3370b`](https://github.com/ljharb/dt-clean/commit/0d3370b2763b0f18e3493014b4c5708abff2c695)
+- [readme] document the `--json` option [`4c2ceea`](https://github.com/ljharb/dt-clean/commit/4c2ceea79e03688d563c384fe7dc59d9312c7cbe)
+
 ## [v1.2.2](https://github.com/ljharb/dt-clean/compare/v1.2.1...v1.2.2) - 2026-07-18
 
 ### Commits
