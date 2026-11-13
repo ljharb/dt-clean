@@ -72,6 +72,8 @@ const {
 		},
 	},
 	positionals: [{ description: 'directory containing the `package.json` to inspect (default: the current directory)', name: 'dir' }],
+	// keep stdout clean for `--json` consumers; an explicit `--help` still prints to stdout
+	usageOnError: 'stderr',
 });
 
 await help();

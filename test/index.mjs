@@ -447,6 +447,15 @@ test('bin: --help prints usage', (t) => {
 	t.end();
 });
 
+test('bin: an unknown option prints the error and usage on stderr, leaving stdout empty', (t) => {
+	const { stdout, stderr, status } = runBin(['--json', '--bogus']);
+	t.equal(status, 1, 'exits nonzero');
+	t.equal(stdout, '', 'prints nothing on stdout, so `--json` consumers never see usage text');
+	t.match(stderr, /Unknown option '--bogus'/, 'reports the unknown option on stderr');
+	t.match(stderr, /Usage: dt-clean/, 'prints the usage on stderr');
+	t.end();
+});
+
 test('bin: reports a dirty project via a positional dir', (t) => {
 	const dir = project(t, {
 		pkg: {
