@@ -47,6 +47,7 @@ With `--update` (`-u`), `dt-clean` edits `package.json` in place - adding, movin
 ### Options
 
 - `-u`, `--update`: apply the changes to `package.json` (default: report only).
+- `--json`: print the result as JSON on stdout, and move the human-readable report to stderr. The object has `present`, `toAdd`, and `toMove` (each mapping a `@types/*` package name to its version range), `toRemain` (an array of the present `@types/*` package names that are kept, including any being moved), and `toRemove` (an array of the `@types/*` package names to remove). It also works with `--update` and `--auto`, and does not change the exit code.
 - `--setup`: idempotently wire (or upgrade) `dt-clean --auto` in a `dependencies` lifecycle script, without overwriting any script it did not author (see [Automatic cleanup](#automatic-cleanup)).
 - `--auto`: for use in a `dependencies` lifecycle script (run directly or via `npx`) - apply the changes like `--update` during `npm install`, but during `npm ci` only print what would change and exit `0`. Through `npx`, the script must pipe the command into stdin for the `npm ci` no-op to work (see [Automatic cleanup](#automatic-cleanup)).
 - `--help`: show usage.
