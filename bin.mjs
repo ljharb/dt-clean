@@ -5,6 +5,7 @@ import { resolve } from 'path';
 // deliberately a relative specifier rather than `#/checkNodeVersion`: resolving a `#/` specifier is
 // itself what fails on an unsupported node, so the check has to be reachable without one.
 import checkNodeVersion from './checkNodeVersion.mjs';
+import { FAILURE, USAGE_ERROR } from './exitCode.mjs';
 
 const unsupported = checkNodeVersion();
 if (unsupported) {
@@ -15,8 +16,14 @@ if (unsupported) {
 		process.exit(0);
 	}
 	console.error(unsupported);
-	process.exit(1);
+	process.exit(FAILURE);
 }
+
+// node exits `1` on an uncaught error, which would read as "packages to remove"
+process.on('uncaughtException', (error) => {
+	console.error(error);
+	process.exit(FAILURE);
+});
 
 // deferred to dynamic imports so the check above gets to run: static imports are resolved before any
 // of this module executes, and on an unsupported node that resolution is exactly what throws.
@@ -76,7 +83,14 @@ const {
 	usageOnError: 'stderr',
 });
 
-await help();
+// pargs exits `1` on a bad option, which would read as "packages to remove"
+const handled = await help({ exit: false });
+if (handled === 'errors') {
+	process.exitCode = USAGE_ERROR;
+}
+if (handled) {
+	process.exit();
+}
 
 const cwd = positionals.length > 0 ? resolve(positionals[0]) : process.cwd();
 
@@ -154,12 +168,12 @@ if (setup) {
 	}[action]);
 } else if (auto && !viaNpx && (!lifecycleEvent || !DEPENDENCY_HOOKS.includes(lifecycleEvent))) {
 	console.error('`--auto` only runs inside a `dependencies` (or `pre`/`postdependencies`) lifecycle script, or via `npx` (see the README); use `--update` to apply changes manually.');
-	process.exitCode = 1;
+	process.exitCode = USAGE_ERROR;
 } else if (auto && viaNpx && !forwarded) {
 	// run through `npx`, npm has already erased the real `npm_command`, so without the piped value
 	// `--auto` cannot tell `npm install` from `npm ci`; rather than guess, fail loudly with the fix.
 	console.error('`--auto` run via `npx` needs the real npm command, which `npx` otherwise erases. Pipe it in with `node -p "process.env.npm_command" | npx dt-clean --auto` as your `dependencies` script (or run `dt-clean --setup` to write it); use `--update` to apply changes manually.');
-	process.exitCode = 1;
+	process.exitCode = USAGE_ERROR;
 } else {
 	const {
 		present,

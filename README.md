@@ -105,8 +105,14 @@ In the default report-only mode, the exit code is a bitmask of the kinds of pend
 
 The bits combine, so a project that needs both an add and a remove exits `3`, and one that needs all three exits `7`.
 
-With `--update`, `dt-clean` applies the changes, leaving the project clean, so a successful run always exits `0`;
-a nonzero exit then means the update itself failed.
+With `--update`, `dt-clean` applies the changes, leaving the project clean, so a successful run always exits `0`.
+
+Errors use codes well outside that `0`-`7` range, so a failure can never be mistaken for pending changes:
+
+| Value | Meaning                                                                                                                                             |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `64`  | usage error: invalid arguments (eg, an unknown option, an invalid option value, more than one directory), or `--auto` outside a context it supports |
+| `70`  | any other failure: an unsupported node version, or an unexpected error (eg, no `package.json`, a failed write)                                      |
 
 [package-url]: https://npmjs.org/package/dt-clean
 [npm-version-svg]: https://versionbadg.es/ljharb/dt-clean.svg

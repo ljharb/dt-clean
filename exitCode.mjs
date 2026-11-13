@@ -4,6 +4,10 @@ export const TO_REMOVE = 1;
 export const TO_ADD = 2;
 export const TO_MOVE = 4;
 
+// errors use the BSD `sysexits.h` codes, well clear of the bitmask's `0`-`7`, so a failure can never read as pending changes
+export const USAGE_ERROR = 64; // EX_USAGE: any argument-parsing error, or `--auto` outside a context it supports
+export const FAILURE = 70; // EX_SOFTWARE: an unsupported node, or any unexpected error
+
 /** @typedef {1 | 2 | 4 | 3 | 6 | 7} PossibleExitCode */
 
 /**

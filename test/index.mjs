@@ -449,10 +449,47 @@ test('bin: --help prints usage', (t) => {
 
 test('bin: an unknown option prints the error and usage on stderr, leaving stdout empty', (t) => {
 	const { stdout, stderr, status } = runBin(['--json', '--bogus']);
-	t.equal(status, 1, 'exits nonzero');
+	t.equal(status, 64, 'exits with the usage-error code, not a pending-changes bitmask value');
 	t.equal(stdout, '', 'prints nothing on stdout, so `--json` consumers never see usage text');
 	t.match(stderr, /Unknown option '--bogus'/, 'reports the unknown option on stderr');
 	t.match(stderr, /Usage: dt-clean/, 'prints the usage on stderr');
+	t.end();
+});
+
+test('bin: more than one directory is a usage error', (t) => {
+	const { stdout, stderr, status } = runBin(['a', 'b']);
+	t.equal(status, 64, 'exits with the usage-error code');
+	t.equal(stdout, '', 'prints nothing on stdout');
+	t.match(stderr, /positional/, 'reports the extra argument on stderr');
+	t.end();
+});
+
+test('bin: --help and --version exit zero without going on to run', (t) => {
+	// an empty cwd, so continuing past `--help`/`--version` would throw (no `package.json`) rather than pass by luck
+	const cwd = mkdtempSync(join(tmpdir(), 'dt-clean-'));
+	t.teardown(() => rmSync(cwd, { recursive: true, force: true }));
+
+	const helped = runBin(['--help'], { cwd });
+	t.equal(helped.status, 0, '`--help` exits zero');
+	t.match(helped.stdout, /Usage: dt-clean/, '`--help` prints the usage');
+	t.doesNotMatch(helped.stdout, /`@types\/\*` package/, '`--help` prints no report');
+	t.equal(helped.stderr, '', '`--help` prints nothing on stderr');
+
+	const { stdout, stderr, status } = runBin(['--version'], { cwd });
+	t.equal(stdout, `v${selfVersion}\n`, '`--version` prints only the version');
+	t.equal(stderr, '', '`--version` prints nothing on stderr');
+	t.equal(status, 0, '`--version` exits zero');
+	t.end();
+});
+
+test('bin: an unexpected error exits with the failure code, not a pending-changes bitmask value', (t) => {
+	const dir = mkdtempSync(join(tmpdir(), 'dt-clean-'));
+	t.teardown(() => rmSync(dir, { recursive: true, force: true }));
+
+	const { stdout, stderr, status } = runBin([dir]);
+	t.equal(status, 70, 'exits with the failure code');
+	t.equal(stdout, '', 'prints nothing on stdout');
+	t.match(stderr, /package\.json/, 'reports the error on stderr');
 	t.end();
 });
 
@@ -667,7 +704,7 @@ test('bin: --auto outside a `dependencies` lifecycle script refuses to run', (t)
 	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no changes when not run as a `dependencies` script');
 	t.equal(stdout, '', 'prints no report');
 	t.match(stderr, /only runs inside a `dependencies`/, 'explains why it refused');
-	t.equal(status, 1, 'exits nonzero on misuse');
+	t.equal(status, 64, 'exits with the usage-error code on misuse');
 	t.end();
 });
 
@@ -715,7 +752,7 @@ test('bin: --auto in an unrelated lifecycle script refuses to run', (t) => {
 	const { status } = runBin(['--auto', dir], { env: envWith({ command: 'install', lifecycle: 'postinstall' }) });
 
 	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'a non-`dependencies` lifecycle event is rejected too');
-	t.equal(status, 1, 'exits nonzero on misuse');
+	t.equal(status, 64, 'exits with the usage-error code on misuse');
 	t.end();
 });
 
@@ -817,7 +854,7 @@ test('bin: --auto via `npx` with no forwarded command errors with the fix', (t) 
 	t.equal(stdout, '', 'prints no report');
 	t.match(stderr, /needs the real npm command/, 'explains what is missing');
 	t.match(stderr, /node -p "process\.env\.npm_command" \| npx dt-clean --auto/, 'shows the fix');
-	t.equal(status, 1, 'exits nonzero so the misconfiguration is loud');
+	t.equal(status, 64, 'exits with the usage-error code so the misconfiguration is loud');
 	t.end();
 });
 
@@ -834,7 +871,7 @@ test('bin: --auto via `npx` with an unexpanded forwarded command errors too', (t
 
 	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'a literal, unexpanded `$npm_command` counts as missing, so it errors rather than guess');
 	t.match(stderr, /needs the real npm command/, 'explains the problem');
-	t.equal(status, 1, 'exits nonzero');
+	t.equal(status, 64, 'exits with the usage-error code');
 	t.end();
 });
 
@@ -1086,7 +1123,7 @@ test('bin: an unsupported node is named, not left to crash on `#/` resolution', 
 		'names the supported range and the running version',
 	);
 	t.doesNotMatch(stderr, /ERR_INVALID_MODULE_SPECIFIER/, 'never reaches the `#/` subpath imports');
-	t.equal(status, 1, 'exits nonzero');
+	t.equal(status, 70, 'exits with the failure code');
 	t.equal(stdout, '', 'says nothing on stdout');
 	t.deepEqual(readScripts(dir), { test: 'tape' }, 'and touches nothing');
 
