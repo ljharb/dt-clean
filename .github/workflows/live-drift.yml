@@ -1,0 +1,56 @@
+name: 'Tests: live registry drift'
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *' # daily, at 06:00 UTC
+
+permissions:
+  contents: read
+
+cache-mode: none
+
+jobs:
+  drift:
+    name: 'unpinned fixtures'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ljharb/actions/node/install@main
+        with:
+          node-version: 24
+      - name: 'regenerate fixtures from the current live registry'
+        # overrides the committed `before` date with "now", ie, effectively unpinned
+        run: NPM_CONFIG_BEFORE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" npm run tests:live
+      - name: 'fail if the live registry has drifted by more than patch versions'
+        run: |
+          git diff -- test/fixtures
+
+          # patch versions are ignored; padding/rule widths follow the version string's length
+          normalize() {
+            sed -E 's/([0-9]+\.[0-9]+)\.[0-9]+/\1.x/g; s/ {2,}/ /g; s/-{2,}/-/g'
+          }
+
+          set -o pipefail
+          failed=0
+          # `-z`: NUL-separated and never C-quoted, so any path is read verbatim
+          while IFS= read -r -d '' line; do
+            status="${line:0:2}"
+            file="${line:3}"
+            if [ "${status}" != ' M' ]; then
+              echo "::error file=${file}::fixture file added or removed (${status})"
+              failed=1
+            elif ! committed="$(git show "HEAD:${file}" | normalize)" || ! regenerated="$(normalize < "${file}")"; then
+              # fail closed: a comparison that could not run must not pass as "unchanged"
+              echo "::error file=${file}::could not compare against the committed fixture"
+              failed=1
+            elif [ "${committed}" != "${regenerated}" ]; then
+              echo "::error file=${file}::changed by more than a patch version"
+              failed=1
+            fi
+          done < <(git status --porcelain -z --untracked-files=all -- test/fixtures)
+
+          if [ "${failed}" -ne 0 ]; then
+            echo 'The live registry has drifted from the committed fixtures; bump the `before` date in `test/fixtures.mjs` and run `npm run tests:live`.'
+          fi
+          exit "${failed}"
