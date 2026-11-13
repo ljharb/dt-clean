@@ -8,6 +8,7 @@ import {
 	mkdirSync,
 	rmSync,
 } from 'fs';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { mangleScopedPackage } from '@definitelytyped/utils';
@@ -29,6 +30,16 @@ const {
 } = process.env;
 const grep = GREP ? new RegExp(GREP) : null;
 const write = !!(UPDATE_SNAPSHOTS || LIVE);
+
+// `LIVE` resolves against the registry as it was at this moment, so a newly published version
+// (eg, an `@types/*` patch) can't make the committed fixtures drift. Bump it deliberately,
+// or override it with npm's `before` config, then re-run `npm run tests:live` to adopt newer releases.
+// npm config comes from `.npmrc` files and case-insensitive env vars, so only npm can resolve it.
+const configuredBefore = LIVE ? execFileSync('npm', ['config', 'get', 'before'], { encoding: 'utf8' }).trim() : 'null';
+const before = configuredBefore === 'null' ? '2026-11-12T00:00:00.000Z' : configuredBefore;
+if (isNaN(Number(new Date(before)))) {
+	throw new TypeError(`npm's \`before\` config must be a valid date; got \`${configuredBefore}\``);
+}
 
 const fixtures = readdirSync(fixturesDir, { withFileTypes: true })
 	.filter((entry) => entry.isDirectory())
@@ -56,7 +67,7 @@ async function regenerateStubs(dir) {
 		if (!coerced) {
 			return;
 		}
-		const result = await realHasTypes(`${name}@${coerced.major}.${coerced.minor}`);
+		const result = await realHasTypes(`${name}@${coerced.major}.${coerced.minor}`, { before });
 
 		const pkgDir = join(nodeModules, name);
 		mkdirSync(pkgDir, { recursive: true });
