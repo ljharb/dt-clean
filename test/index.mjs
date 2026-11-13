@@ -873,6 +873,52 @@ test('bin: --auto via `npx` with no forwarded command errors with the fix', (t) 
 	t.end();
 });
 
+test('bin: --auto via `npx` never reads stdin when it is a terminal', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	// `install` would apply the changes if it were read; a terminal is never waited on, so it is not
+	const { stdout, stderr, status } = runBin(['--auto', dir], {
+		env: envWith({ command: 'exec', lifecycle: 'npx' }),
+		input: 'install\n',
+		nodeArgs: ['--import', pathToFileURL(join(root, 'helpers', 'fakeTTYStdin.mjs')).href],
+	});
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no changes');
+	t.equal(stdout, '', 'prints no report');
+	t.match(stderr, /needs the real npm command/, 'treats it as nothing forwarded');
+	t.equal(status, 64, 'exits with the usage-error code');
+	t.end();
+});
+
+test('bin: --auto via `npx` treats a failed stdin read as nothing forwarded', (t) => {
+	const dir = project(t, {
+		pkg: {
+			dependencies: { '@types/orphan': '^1.0.0' },
+			devDependencies: { '@types/node': '^25.0.0' },
+		},
+	});
+	const before = `${readFileSync(join(dir, 'package.json'))}`;
+
+	const { stdout, stderr, status } = runBin(['--auto', dir], {
+		env: envWith({ command: 'exec', lifecycle: 'npx' }),
+		input: 'install\n',
+		nodeArgs: ['--import', pathToFileURL(join(root, 'helpers', 'failingStdin.mjs')).href],
+	});
+
+	t.equal(`${readFileSync(join(dir, 'package.json'))}`, before, 'makes no changes');
+	t.equal(stdout, '', 'prints no report');
+	t.match(stderr, /needs the real npm command/, 'treats it as nothing forwarded');
+	t.doesNotMatch(stderr, /simulated stdin read failure/, 'swallows the read error rather than crashing');
+	t.equal(status, 64, 'exits with the usage-error code');
+	t.end();
+});
+
 test('bin: --auto via `npx` with an unexpanded forwarded command errors too', (t) => {
 	const dir = project(t, {
 		pkg: {
