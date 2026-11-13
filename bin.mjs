@@ -134,14 +134,15 @@ async function pipedCommand() {
 	const { text } = await import('stream/consumers');
 	const timer = setTimeout(() => process.stdin.destroy(), 10000);
 	timer.unref();
+	let piped;
 	try {
-		return asCommand(await text(process.stdin));
+		piped = await text(process.stdin);
 	} catch {
 		// destroyed by the timeout, or a read error: treat it as nothing forwarded
-		return undefined;
 	} finally {
 		clearTimeout(timer);
 	}
+	return asCommand(piped);
 }
 
 // the command npm is really running: straight from npm when invoked directly; through `npx` it comes
